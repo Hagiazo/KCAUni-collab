@@ -25,7 +25,7 @@ const App = () => (
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/unit/:unitId" element={<Unit />} />
-          <Route path="/unit/:unitId/group/:groupId" element={<GroupWorkspace />} />
+          <Route path="/group/:groupId" element={<GroupWorkspace />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

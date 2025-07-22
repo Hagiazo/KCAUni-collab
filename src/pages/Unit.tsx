@@ -294,7 +294,7 @@ const Unit = () => {
                           Last activity: {group.lastActivity}
                         </div>
                         <div className="flex space-x-2">
-                          <Link to={`/unit/${unitId}/group/${group.id}`}>
+                          <Link to={`/group/${group.id}`}>
                             <Button variant="outline" size="sm">
                               <MessageSquare className="w-3 h-3 mr-1" />
                               View Workspace

@@ -2,8 +2,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, Users, BookOpen, MessageSquare, CheckCircle, Video, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
-import heroCampus from "@/assets/hero-campus.jpg";
-import collaborationIllustration from "@/assets/collaboration-illustration.jpg";
 
 const Landing = () => {
   return (
@@ -37,10 +35,7 @@ const Landing = () => {
 
       {/* Hero Section */}
       <section className="relative overflow-hidden">
-        <div 
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: `url(${heroCampus})` }}
-        >
+        <div className="absolute inset-0 bg-gradient-to-r from-header/95 to-primary/80">
           <div className="absolute inset-0 bg-gradient-to-r from-header/90 to-header/70"></div>
         </div>
         
@@ -70,11 +65,12 @@ const Landing = () => {
             </div>
             
             <div className="relative animate-scale-in">
-              <img 
-                src={collaborationIllustration}
-                alt="Students collaborating"
-                className="w-full h-auto rounded-2xl shadow-glow"
-              />
+              <div className="w-full h-96 bg-gradient-to-br from-primary/20 to-accent/20 rounded-2xl shadow-glow flex items-center justify-center border border-primary/20">
+                <div className="text-center">
+                  <Users className="w-24 h-24 text-primary mx-auto mb-4" />
+                  <p className="text-white/80 text-lg">Students Collaborating</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
