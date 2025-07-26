@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CollaborativeEditor } from "@/components/ui/collaborative-editor";
+import { FileSharing } from "@/components/ui/file-sharing";
+import { RealtimeChat } from "@/components/ui/realtime-chat";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { VideoCall } from "@/components/ui/video-call";
 import { 
@@ -31,6 +34,7 @@ import {
   History
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { wsManager } from "@/lib/websocket";
 
 const GroupWorkspace = () => {
   const { unitId, groupId } = useParams();
@@ -38,6 +42,7 @@ const GroupWorkspace = () => {
   const [userName] = useState(localStorage.getItem("userName") || "John Doe");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
+  const userId = localStorage.getItem("userId") || "1";
   // State for different components
   const [document, setDocument] = useState("");
   const [chatMessage, setChatMessage] = useState("");
@@ -45,6 +50,13 @@ const GroupWorkspace = () => {
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [documentSaved, setDocumentSaved] = useState(true);
   const [lastSaved, setLastSaved] = useState<Date>(new Date());
+
+  // Initialize WebSocket connection
+  useEffect(() => {
+    if (groupId && userId && userName) {
+      wsManager.connect(groupId, userId, userName);
+    }
+  }, [groupId, userId, userName]);
 
   // Mock data
   const mockGroup = {
@@ -57,6 +69,21 @@ const GroupWorkspace = () => {
       { id: 3, name: "Mike Johnson", email: "mike@university.edu", role: "Member", online: false }
     ]
   };
+
+  // Mock shared files
+  const mockFiles = [
+    {
+      id: '1',
+      name: 'Requirements_Document.pdf',
+      type: 'application/pdf',
+      size: 2400000,
+      uploadedBy: 'John Doe',
+      uploadedAt: new Date('2024-02-05T14:30:00'),
+      description: 'Project requirements and specifications',
+      version: 1,
+      isShared: true
+    }
+  ];
 
   const [chatMessages, setChatMessages] = useState([
     {
@@ -146,6 +173,11 @@ const GroupWorkspace = () => {
     }
   ]);
 
+  // Handle document content changes
+  const handleDocumentChange = useCallback((content: string) => {
+    setDocument(content);
+  }, []);
+
   // Auto-save document
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -158,11 +190,6 @@ const GroupWorkspace = () => {
 
     return () => clearTimeout(timer);
   }, [document, documentSaved]);
-
-  const handleDocumentChange = (value: string) => {
-    setDocument(value);
-    setDocumentSaved(false);
-  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -349,35 +376,14 @@ This project focuses on designing and implementing a comprehensive database syst
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Textarea
-                  value={document}
-                  onChange={(e) => handleDocumentChange(e.target.value)}
-                  className="min-h-[500px] bg-card/50 border-primary/20 focus:border-primary font-mono text-sm resize-none"
-                  placeholder="Start writing your group document here..."
+                <CollaborativeEditor
+                  documentId={`group-${groupId}-main-doc`}
+                  initialContent={document}
+                  groupId={groupId!}
+                  userId={userId}
+                  userName={userName}
+                  onContentChange={handleDocumentChange}
                 />
-                <div className="flex justify-between items-center mt-4">
-                  <div className="text-xs text-muted-foreground">
-                    {documentSaved ? (
-                      <>Last saved: {lastSaved.toLocaleTimeString()} • <span className="text-green-600">Saved</span></>
-                    ) : (
-                      <>Saving... • <span className="text-yellow-600">Unsaved changes</span></>
-                    )}
-                  </div>
-                  <div className="flex space-x-2">
-                    <Button variant="outline" size="sm">
-                      <History className="w-4 h-4 mr-2" />
-                      Version History
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Save className="w-4 h-4 mr-2" />
-                      Save
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Download className="w-4 h-4 mr-2" />
-                      Export
-                    </Button>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -385,49 +391,20 @@ This project focuses on designing and implementing a comprehensive database syst
           {/* Chat */}
           <TabsContent value="chat">
             <Card className="bg-card/80 backdrop-blur-sm border-primary/10">
-              <CardHeader>
-                <CardTitle className="text-foreground">Group Chat</CardTitle>
-                <CardDescription className="text-muted-foreground">
-                  Communicate with your team members in real-time
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <ScrollArea className="h-[400px] p-4">
-                  <div className="space-y-4">
-                    {chatMessages.map((message) => (
-                      <div key={message.id} className={`flex ${message.sender === userName ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-xs lg:max-w-md p-3 rounded-lg ${
-                          message.sender === userName 
-                            ? 'bg-primary text-primary-foreground' 
-                            : 'bg-secondary/20 text-foreground'
-                        }`}>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-xs font-medium">
-                              {message.sender === userName ? 'You' : message.sender}
-                            </span>
-                            <span className="text-xs opacity-70">{message.timestamp}</span>
-                          </div>
-                          <p className="text-sm">{message.message}</p>
-                        </div>
-                      </div>
-                    ))}
-                    <div ref={messagesEndRef} />
-                  </div>
-                </ScrollArea>
-                <div className="p-4 border-t border-primary/10">
-                  <div className="flex space-x-2">
-                    <Input
-                      value={chatMessage}
-                      onChange={(e) => setChatMessage(e.target.value)}
-                      placeholder="Type your message..."
-                      className="bg-card/50 border-primary/20 focus:border-primary"
-                      onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    />
-                    <Button onClick={handleSendMessage} size="sm">
-                      <Send className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
+              <CardContent className="p-0 h-[600px]">
+                <RealtimeChat
+                  groupId={groupId!}
+                  userId={userId}
+                  userName={userName}
+                  initialMessages={chatMessages.map(msg => ({
+                    id: msg.id.toString(),
+                    senderId: msg.sender === userName ? userId : 'other',
+                    senderName: msg.sender,
+                    message: msg.message,
+                    timestamp: new Date(),
+                    type: 'text' as const
+                  }))}
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -603,49 +580,12 @@ This project focuses on designing and implementing a comprehensive database syst
 
           {/* Files */}
           <TabsContent value="files">
-            <Card className="bg-card/80 backdrop-blur-sm border-primary/10">
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle className="text-foreground">Shared Files</CardTitle>
-                    <CardDescription className="text-muted-foreground">
-                      Upload and share files with your team
-                    </CardDescription>
-                  </div>
-                  <Button variant="accent" size="sm">
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload File
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {files.map((file) => (
-                    <div key={file.id} className="flex items-center justify-between p-3 bg-secondary/10 rounded-lg border border-secondary/20">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                          <Paperclip className="w-5 h-5 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground text-sm">{file.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {file.size} • Uploaded by {file.uploadedBy} • {file.uploadedAt}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Button variant="outline" size="sm">
-                          <Download className="w-4 h-4" />
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <FileSharing
+              groupId={groupId!}
+              userId={userId}
+              userName={userName}
+              initialFiles={mockFiles}
+            />
           </TabsContent>
 
           {/* Submit */}
