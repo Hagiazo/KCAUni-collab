@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BookOpen, Mail, Lock, User, ArrowLeft, GraduationCap, Users } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { db } from "@/lib/database";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -19,8 +20,18 @@ const Register = () => {
     course: ""
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [courses, setCourses] = useState<any[]>([]);
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Load courses on component mount
+  useState(() => {
+    const loadCourses = async () => {
+      const availableCourses = await db.getCourses();
+      setCourses(availableCourses);
+    };
+    loadCourses();
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,20 +47,47 @@ const Register = () => {
       return;
     }
 
-    // Mock registration logic
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      localStorage.setItem("userRole", formData.role);
-      localStorage.setItem("userName", formData.name);
-      localStorage.setItem("userId", Date.now().toString());
-      
+    if (formData.role === 'student' && !formData.course) {
       toast({
-        title: "Account Created!",
-        description: "Welcome to UniCollab. You've been successfully registered.",
+        title: "Course Required",
+        description: "Please select your course of study.",
+        variant: "destructive"
       });
-      
-      navigate("/dashboard");
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const result = await db.createUser({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password, // In production, hash this
+        role: formData.role as 'student' | 'lecturer',
+        course: formData.role === 'student' ? formData.course : undefined
+      });
+
+      if (result.success && result.user) {
+        localStorage.setItem("userRole", result.user.role);
+        localStorage.setItem("userName", result.user.name);
+        localStorage.setItem("userId", result.user.id);
+        localStorage.setItem("userEmail", result.user.email);
+        if (result.user.course) {
+          localStorage.setItem("userCourse", result.user.course);
+        }
+        
+        toast({
+          title: "Account Created!",
+          description: "Welcome to KCAU UniCollab. You've been successfully registered.",
+        });
+        
+        navigate("/dashboard");
+      } else {
+        toast({
+          title: "Registration Failed",
+          description: result.error || "Something went wrong. Please try again.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
       toast({
         title: "Registration Failed",
@@ -63,6 +101,22 @@ const Register = () => {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const getEmailPlaceholder = () => {
+    if (formData.role === 'student') {
+      return "e.g., 2507564@students.kcau.ac.ke";
+    } else {
+      return "e.g., 0001@lecturer.kcau.ac.ke";
+    }
+  };
+
+  const getEmailHelper = () => {
+    if (formData.role === 'student') {
+      return "Format: YYNNNNN@students.kcau.ac.ke (YY = admission year, NNNNN = student number)";
+    } else {
+      return "Format: NNNN@lecturer.kcau.ac.ke (NNNN = 4-digit staff number)";
+    }
   };
 
   return (
@@ -79,7 +133,7 @@ const Register = () => {
             <div className="mx-auto w-12 h-12 bg-gradient-primary rounded-lg flex items-center justify-center mb-4">
               <BookOpen className="w-6 h-6 text-primary-foreground" />
             </div>
-            <CardTitle className="text-2xl font-bold text-foreground">Join UniCollab</CardTitle>
+            <CardTitle className="text-2xl font-bold text-foreground">Join KCAU UniCollab</CardTitle>
             <CardDescription className="text-muted-foreground">
               Create your account and start collaborating
             </CardDescription>
@@ -97,54 +151,6 @@ const Register = () => {
                     placeholder="John Doe"
                     value={formData.name}
                     onChange={(e) => handleInputChange("name", e.target.value)}
-                    className="pl-10 bg-card/50 border-primary/20 focus:border-primary"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-foreground">Email</Label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="your.email@university.edu"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange("email", e.target.value)}
-                    className="pl-10 bg-card/50 border-primary/20 focus:border-primary"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-foreground">Password</Label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Create a strong password"
-                    value={formData.password}
-                    onChange={(e) => handleInputChange("password", e.target.value)}
-                    className="pl-10 bg-card/50 border-primary/20 focus:border-primary"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-foreground">Confirm Password</Label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    placeholder="Confirm your password"
-                    value={formData.confirmPassword}
-                    onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
                     className="pl-10 bg-card/50 border-primary/20 focus:border-primary"
                     required
                   />
@@ -182,22 +188,64 @@ const Register = () => {
                       <SelectValue placeholder="Select your course" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="computer-science">Computer Science</SelectItem>
-                      <SelectItem value="information-technology">Information Technology</SelectItem>
-                      <SelectItem value="software-engineering">Software Engineering</SelectItem>
-                      <SelectItem value="data-science">Data Science</SelectItem>
-                      <SelectItem value="cybersecurity">Cybersecurity</SelectItem>
-                      <SelectItem value="business-administration">Business Administration</SelectItem>
-                      <SelectItem value="accounting">Accounting</SelectItem>
-                      <SelectItem value="marketing">Marketing</SelectItem>
-                      <SelectItem value="education">Education</SelectItem>
-                      <SelectItem value="nursing">Nursing</SelectItem>
-                      <SelectItem value="medicine">Medicine</SelectItem>
-                      <SelectItem value="engineering">Engineering</SelectItem>
+                      {courses.map((course) => (
+                        <SelectItem key={course.id} value={course.id}>
+                          {course.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
               )}
+
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-foreground">KCAU Email</Label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder={getEmailPlaceholder()}
+                    value={formData.email}
+                    onChange={(e) => handleInputChange("email", e.target.value)}
+                    className="pl-10 bg-card/50 border-primary/20 focus:border-primary"
+                    required
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">{getEmailHelper()}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-foreground">Password</Label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Create a strong password"
+                    value={formData.password}
+                    onChange={(e) => handleInputChange("password", e.target.value)}
+                    className="pl-10 bg-card/50 border-primary/20 focus:border-primary"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-foreground">Confirm Password</Label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="Confirm your password"
+                    value={formData.confirmPassword}
+                    onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
+                    className="pl-10 bg-card/50 border-primary/20 focus:border-primary"
+                    required
+                  />
+                </div>
+              </div>
 
               <Button 
                 type="submit" 

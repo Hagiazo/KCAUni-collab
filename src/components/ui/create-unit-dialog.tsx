@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { db } from "@/lib/database";
+import { db, type Course } from "@/lib/database";
 
 interface CreateUnitDialogProps {
   lecturerId: string;
@@ -16,23 +16,32 @@ interface CreateUnitDialogProps {
 
 export const CreateUnitDialog = ({ lecturerId, onUnitCreated }: CreateUnitDialogProps) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [formData, setFormData] = useState({
     code: "",
     name: "",
     description: "",
-    course: "",
+    courseId: "",
     semester: "",
     credits: "3"
   });
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
+  useEffect(() => {
+    const loadCourses = async () => {
+      const availableCourses = await db.getCourses();
+      setCourses(availableCourses);
+    };
+    loadCourses();
+  }, []);
+
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleCreateUnit = async () => {
-    if (!formData.code.trim() || !formData.name.trim() || !formData.course.trim()) {
+    if (!formData.code.trim() || !formData.name.trim() || !formData.courseId.trim()) {
       toast({
         title: "Required fields missing",
         description: "Please fill in all required fields.",
@@ -48,11 +57,9 @@ export const CreateUnitDialog = ({ lecturerId, onUnitCreated }: CreateUnitDialog
         name: formData.name,
         description: formData.description || `${formData.name} course unit`,
         lecturerId,
-        course: formData.course,
+        courseId: formData.courseId,
         semester: formData.semester || "Fall 2024",
-        credits: parseInt(formData.credits),
-        enrolledStudents: [],
-        assignments: []
+        credits: parseInt(formData.credits)
       });
 
       toast({
@@ -65,7 +72,7 @@ export const CreateUnitDialog = ({ lecturerId, onUnitCreated }: CreateUnitDialog
         code: "",
         name: "",
         description: "",
-        course: "",
+        courseId: "",
         semester: "",
         credits: "3"
       });
@@ -123,18 +130,16 @@ export const CreateUnitDialog = ({ lecturerId, onUnitCreated }: CreateUnitDialog
 
           <div>
             <Label htmlFor="course" className="text-foreground">Course *</Label>
-            <Select value={formData.course} onValueChange={(value) => handleInputChange("course", value)}>
+            <Select value={formData.courseId} onValueChange={(value) => handleInputChange("courseId", value)}>
               <SelectTrigger className="bg-card/50 border-primary/20 focus:border-primary">
                 <SelectValue placeholder="Select course" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Computer Science">Computer Science</SelectItem>
-                <SelectItem value="Information Technology">Information Technology</SelectItem>
-                <SelectItem value="Software Engineering">Software Engineering</SelectItem>
-                <SelectItem value="Data Science">Data Science</SelectItem>
-                <SelectItem value="Cybersecurity">Cybersecurity</SelectItem>
-                <SelectItem value="Business Administration">Business Administration</SelectItem>
-                <SelectItem value="Engineering">Engineering</SelectItem>
+                {courses.map((course) => (
+                  <SelectItem key={course.id} value={course.id}>
+                    {course.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -185,7 +190,7 @@ export const CreateUnitDialog = ({ lecturerId, onUnitCreated }: CreateUnitDialog
             <Button 
               onClick={handleCreateUnit} 
               variant="hero"
-              disabled={isLoading || !formData.code.trim() || !formData.name.trim() || !formData.course.trim()}
+              disabled={isLoading || !formData.code.trim() || !formData.name.trim() || !formData.courseId.trim()}
             >
               {isLoading ? "Creating..." : "Create Unit"}
             </Button>

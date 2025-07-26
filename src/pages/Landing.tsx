@@ -58,9 +58,6 @@ const Landing = () => {
                     Get Started <ArrowRight className="w-5 h-5" />
                   </Button>
                 </Link>
-                <Button variant="outline" size="lg" className="w-full sm:w-auto text-white border-white/30 hover:bg-white/10">
-                  Watch Demo
-                </Button>
               </div>
             </div>
             

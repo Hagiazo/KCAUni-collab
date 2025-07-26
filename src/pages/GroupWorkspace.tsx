@@ -320,7 +320,9 @@ This project focuses on designing and implementing a comprehensive database syst
                   />
                   <Button variant="outline" size="sm" className="ml-2">
                     <GitBranch className="w-4 h-4 mr-2" />
-                    GitHub
+                    <a href="https://github.com" target="_blank" rel="noopener noreferrer">
+                      GitHub
+                    </a>
                   </Button>
                 </div>
                 <div className="flex -space-x-2">

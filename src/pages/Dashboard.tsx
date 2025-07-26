@@ -8,14 +8,16 @@ import { useToast } from "@/hooks/use-toast";
 import { NotificationBell } from "@/components/ui/notification-bell";
 import { CreateGroupDialog } from "@/components/ui/create-group-dialog";
 import { CreateUnitDialog } from "@/components/ui/create-unit-dialog";
-import { db, type Unit, type Group } from "@/lib/database";
+import { db, type Unit, type Group, type User } from "@/lib/database";
 
 const Dashboard = () => {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userCourse, setUserCourse] = useState<string | null>(null);
   const [units, setUnits] = useState<Unit[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [students, setStudents] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -23,9 +25,10 @@ const Dashboard = () => {
   useEffect(() => {
     const role = localStorage.getItem("userRole");
     const name = localStorage.getItem("userName");
-    const id = localStorage.getItem("userId") || "1"; // Default for demo
+    const id = localStorage.getItem("userId");
+    const course = localStorage.getItem("userCourse");
     
-    if (!role || !name) {
+    if (!role || !name || !id) {
       navigate("/login");
       return;
     }
@@ -33,33 +36,29 @@ const Dashboard = () => {
     setUserRole(role);
     setUserName(name);
     setUserId(id);
-    loadDashboardData(role, id);
+    setUserCourse(course);
+    loadDashboardData(role, id, course);
   }, [navigate]);
 
-  const loadDashboardData = async (role: string, userId: string) => {
+  const loadDashboardData = async (role: string, userId: string, courseId?: string | null) => {
     setIsLoading(true);
     try {
       if (role === 'student') {
         const studentUnits = await db.getUnitsByStudent(userId);
         setUnits(studentUnits);
         
-        // Load groups for all units
-        const allGroups = await Promise.all(
-          studentUnits.map(unit => db.getGroupsByUnit(unit.id))
-        );
-        const userGroups = allGroups.flat().filter(group => 
-          group.members.some(member => member.userId === userId)
-        );
+        const userGroups = await db.getGroupsByStudent(userId);
         setGroups(userGroups);
       } else if (role === 'lecturer') {
         const lecturerUnits = await db.getUnitsByLecturer(userId);
         setUnits(lecturerUnits);
         
-        // Load all groups for lecturer's units
-        const allGroups = await Promise.all(
-          lecturerUnits.map(unit => db.getGroupsByUnit(unit.id))
-        );
-        setGroups(allGroups.flat());
+        const lecturerGroups = await db.getGroupsByLecturer(userId);
+        setGroups(lecturerGroups);
+
+        // Load all students for lecturer overview
+        const allStudents = await db.getAllUsers();
+        setStudents(allStudents.filter(u => u.role === 'student'));
       }
     } catch (error) {
       toast({
@@ -76,6 +75,8 @@ const Dashboard = () => {
     localStorage.removeItem("userRole");
     localStorage.removeItem("userName");
     localStorage.removeItem("userId");
+    localStorage.removeItem("userEmail");
+    localStorage.removeItem("userCourse");
     toast({
       title: "Logged Out",
       description: "You have been successfully logged out."
@@ -85,13 +86,13 @@ const Dashboard = () => {
 
   const handleUnitCreated = () => {
     if (userId && userRole) {
-      loadDashboardData(userRole, userId);
+      loadDashboardData(userRole, userId, userCourse);
     }
   };
 
   const handleGroupCreated = () => {
     if (userId && userRole) {
-      loadDashboardData(userRole, userId);
+      loadDashboardData(userRole, userId, userCourse);
     }
   };
 
@@ -133,7 +134,7 @@ const Dashboard = () => {
               <div className="w-8 h-8 bg-gradient-accent rounded-lg flex items-center justify-center">
                 <BookOpen className="w-5 h-5 text-accent-foreground" />
               </div>
-              <span className="text-xl font-bold text-header-foreground">UniCollab</span>
+              <span className="text-xl font-bold text-header-foreground">KCAU UniCollab</span>
             </div>
             
             <div className="flex items-center space-x-4">
@@ -212,6 +213,9 @@ const Dashboard = () => {
                     </Badge>
                   </div>
                 ))}
+                {groups.length === 0 && (
+                  <p className="text-muted-foreground text-center py-4">No groups created yet</p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -252,55 +256,60 @@ const Dashboard = () => {
                       <p className="text-muted-foreground">
                         {userRole === 'student' ? 'No units enrolled yet' : 'No units created yet'}
                       </p>
+                      {userRole === 'student' && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Contact your lecturer to be enrolled in units
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 ) : (
                   units.map((unit) => (
-                <Card key={unit.id} className="bg-card/80 backdrop-blur-sm border-primary/10 hover:shadow-card transition-all duration-300 hover:scale-[1.02]">
-                  <CardHeader className="pb-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg text-foreground">{unit.code} - {unit.name}</CardTitle>
-                        <CardDescription className="text-muted-foreground">
-                          {userRole === 'student' ? `Course: ${unit.course}` : `${unit.enrolledStudents.length} students enrolled`}
-                        </CardDescription>
-                      </div>
-                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                        {unit.assignments.length} assignments
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex space-x-4 text-sm text-muted-foreground mb-4">
-                      <span className="flex items-center">
-                        <Users className="w-3 h-3 mr-1" />
-                        {unit.enrolledStudents.length} students
-                      </span>
-                      <span className="flex items-center">
-                        <Calendar className="w-3 h-3 mr-1" />
-                        {unit.semester}
-                      </span>
-                      <span className="flex items-center">
-                        <FileText className="w-3 h-3 mr-1" />
-                        {unit.credits} credits
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <Link to={`/unit/${unit.id}`}>
-                        <Button variant="outline" size="sm">
-                          View Unit
-                        </Button>
-                      </Link>
-                      {userRole === 'student' && (
-                        <CreateGroupDialog 
-                          unitId={unit.id}
-                          currentUserId={userId}
-                          onGroupCreated={handleGroupCreated}
-                        />
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                    <Card key={unit.id} className="bg-card/80 backdrop-blur-sm border-primary/10 hover:shadow-card transition-all duration-300 hover:scale-[1.02]">
+                      <CardHeader className="pb-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg text-foreground">{unit.code} - {unit.name}</CardTitle>
+                            <CardDescription className="text-muted-foreground">
+                              {userRole === 'student' ? `Semester: ${unit.semester}` : `${unit.enrolledStudents.length} students enrolled`}
+                            </CardDescription>
+                          </div>
+                          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                            {unit.assignments.length} assignments
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex space-x-4 text-sm text-muted-foreground mb-4">
+                          <span className="flex items-center">
+                            <Users className="w-3 h-3 mr-1" />
+                            {unit.enrolledStudents.length} students
+                          </span>
+                          <span className="flex items-center">
+                            <Calendar className="w-3 h-3 mr-1" />
+                            {unit.semester}
+                          </span>
+                          <span className="flex items-center">
+                            <FileText className="w-3 h-3 mr-1" />
+                            {unit.credits} credits
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <Link to={`/unit/${unit.id}`}>
+                            <Button variant="outline" size="sm">
+                              View Unit
+                            </Button>
+                          </Link>
+                          {userRole === 'student' && (
+                            <CreateGroupDialog 
+                              unitId={unit.id}
+                              currentUserId={userId}
+                              onGroupCreated={handleGroupCreated}
+                            />
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
                   ))
                 )}
               </div>
@@ -357,16 +366,16 @@ const Dashboard = () => {
               <div className="space-y-4">
                 <Card className="bg-card/80 backdrop-blur-sm border-primary/10">
                   <CardContent className="p-4">
-                    <p className="text-sm text-muted-foreground">Student submitted assignment</p>
-                    <p className="font-medium text-foreground">CS301 - Project Proposal</p>
-                    <p className="text-xs text-muted-foreground">2 hours ago</p>
+                    <p className="text-sm text-muted-foreground">Total registered students</p>
+                    <p className="font-medium text-foreground">{students.length}</p>
+                    <p className="text-xs text-muted-foreground">Across all courses</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-card/80 backdrop-blur-sm border-primary/10">
                   <CardContent className="p-4">
-                    <p className="text-sm text-muted-foreground">New group created</p>
-                    <p className="font-medium text-foreground">CS401 - Team Delta</p>
-                    <p className="text-xs text-muted-foreground">1 day ago</p>
+                    <p className="text-sm text-muted-foreground">Active groups</p>
+                    <p className="font-medium text-foreground">{groups.length}</p>
+                    <p className="text-xs text-muted-foreground">In your units</p>
                   </CardContent>
                 </Card>
               </div>
