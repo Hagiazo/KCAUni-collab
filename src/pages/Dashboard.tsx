@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Users, MessageSquare, Clock, Plus, Settings, LogOut, Bell, TrendingUp, Calendar, FileText, AlertCircle } from "lucide-react";
+import { BookOpen, Users, MessageSquare, Clock, Plus, Settings, LogOut, Bell, TrendingUp, Calendar, FileText, AlertCircle, Search } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { NotificationBell } from "@/components/ui/notification-bell";
@@ -18,6 +21,15 @@ const Dashboard = () => {
   const [units, setUnits] = useState<Unit[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [students, setStudents] = useState<User[]>([]);
+  const [availableUnits, setAvailableUnits] = useState<Unit[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isSearchUnitsOpen, setIsSearchUnitsOpen] = useState(false);
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [newGroup, setNewGroup] = useState({
+    name: "",
+    description: "",
+    maxMembers: "4"
+  });
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -49,6 +61,10 @@ const Dashboard = () => {
         
         const userGroups = await db.getGroupsByStudent(userId);
         setGroups(userGroups);
+        
+        // Load available units for enrollment
+        const availableUnitsData = await db.getAvailableUnitsForStudent(userId);
+        setAvailableUnits(availableUnitsData);
       } else if (role === 'lecturer') {
         const lecturerUnits = await db.getUnitsByLecturer(userId);
         setUnits(lecturerUnits);
@@ -68,6 +84,91 @@ const Dashboard = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleEnrollInUnit = async (unitId: string) => {
+    try {
+      const result = await db.requestEnrollment(unitId, userId, "Request to enroll in this unit");
+      if (result.success) {
+        toast({
+          title: "Enrollment Request Sent",
+          description: "Your enrollment request has been sent to the lecturer for approval."
+        });
+        // Refresh available units
+        const availableUnitsData = await db.getAvailableUnitsForStudent(userId);
+        setAvailableUnits(availableUnitsData);
+      } else {
+        toast({
+          title: "Error",
+          description: result.error || "Failed to send enrollment request",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to send enrollment request",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleCreateGeneralGroup = async () => {
+    if (!newGroup.name.trim()) {
+      toast({
+        title: "Group name required",
+        description: "Please enter a name for your group.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Create a general group without a specific unit
+      await db.createGroup({
+        name: newGroup.name,
+        description: newGroup.description || "General collaboration group",
+        unitId: "", // No specific unit
+        courseId: userCourse || "",
+        leaderId: userId,
+        members: [{
+          userId: userId,
+          role: 'leader',
+          joinedAt: new Date(),
+          contributions: 0
+        }],
+        maxMembers: parseInt(newGroup.maxMembers),
+        workspace: {
+          documents: [],
+          chatMessages: [],
+          tasks: [],
+          files: [],
+          submissions: [],
+          meetingHistory: []
+        },
+        createdBy: 'student',
+        createdById: userId
+      });
+
+      toast({
+        title: "Group created successfully!",
+        description: `"${newGroup.name}" has been created.`
+      });
+
+      setNewGroup({ name: "", description: "", maxMembers: "4" });
+      setIsCreateGroupOpen(false);
+      
+      // Refresh groups
+      if (userId && userRole) {
+        loadDashboardData(userRole, userId, userCourse);
+      }
+    } catch (error) {
+      toast({
+        title: "Error creating group",
+        description: "Failed to create group. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -124,6 +225,11 @@ const Dashboard = () => {
 
   const quickStats = getQuickStats();
 
+  const filteredAvailableUnits = availableUnits.filter(unit =>
+    unit.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    unit.code.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -170,6 +276,116 @@ const Dashboard = () => {
               : "Manage your courses and monitor student progress."
             }
           </p>
+          
+          {/* Student Quick Actions */}
+          {userRole === 'student' && (
+            <div className="flex space-x-4 mt-4">
+              <Dialog open={isSearchUnitsOpen} onOpenChange={setIsSearchUnitsOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Search className="w-4 h-4 mr-2" />
+                    Find Units
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-card/95 backdrop-blur-sm border-primary/10 max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="text-foreground">Available Units</DialogTitle>
+                    <DialogDescription className="text-muted-foreground">
+                      Search and enroll in available units for your course.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="unitSearch" className="text-foreground">Search Units</Label>
+                      <Input
+                        id="unitSearch"
+                        placeholder="Search by unit name or code..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="bg-card/50 border-primary/20 focus:border-primary"
+                      />
+                    </div>
+                    <div className="max-h-96 overflow-y-auto space-y-2">
+                      {filteredAvailableUnits.length === 0 ? (
+                        <p className="text-muted-foreground text-center py-4">
+                          {searchTerm ? 'No units match your search' : 'No available units found'}
+                        </p>
+                      ) : (
+                        filteredAvailableUnits.map((unit) => (
+                          <div key={unit.id} className="p-3 bg-secondary/10 rounded-lg border border-secondary/20">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="font-medium text-foreground">{unit.code} - {unit.name}</h4>
+                                <p className="text-sm text-muted-foreground">{unit.description}</p>
+                                <div className="flex items-center text-xs text-muted-foreground mt-1">
+                                  <Calendar className="w-3 h-3 mr-1" />
+                                  {unit.semester} • {unit.credits} credits
+                                </div>
+                              </div>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => handleEnrollInUnit(unit.id)}
+                              >
+                                Request Enrollment
+                              </Button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              
+              <Dialog open={isCreateGroupOpen} onOpenChange={setIsCreateGroupOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="accent" size="sm">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create Group
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-card/95 backdrop-blur-sm border-primary/10 max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="text-foreground">Create New Group</DialogTitle>
+                    <DialogDescription className="text-muted-foreground">
+                      Create a general collaboration group.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="groupName" className="text-foreground">Group Name *</Label>
+                      <Input
+                        id="groupName"
+                        placeholder="Enter group name"
+                        value={newGroup.name}
+                        onChange={(e) => setNewGroup(prev => ({ ...prev, name: e.target.value }))}
+                        className="bg-card/50 border-primary/20 focus:border-primary"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="groupDescription" className="text-foreground">Description</Label>
+                      <Input
+                        id="groupDescription"
+                        placeholder="Describe your group's purpose"
+                        value={newGroup.description}
+                        onChange={(e) => setNewGroup(prev => ({ ...prev, description: e.target.value }))}
+                        className="bg-card/50 border-primary/20 focus:border-primary"
+                      />
+                    </div>
+                    <Button 
+                      onClick={handleCreateGeneralGroup} 
+                      variant="hero"
+                      disabled={!newGroup.name.trim()}
+                      className="w-full"
+                    >
+                      Create Group
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
         </div>
 
         {/* Quick Stats */}

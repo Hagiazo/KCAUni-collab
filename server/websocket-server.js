@@ -2,7 +2,6 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
-const pool = require('./db');
 
 
 const app = express();
@@ -11,7 +10,7 @@ const server = http.createServer(app);
 // Configure CORS for Socket.IO
 const io = socketIo(server, {
   cors: {
-    origin: ["http://localhost:8080", "http://localhost:3000"],
+    origin: ["http://localhost:8080", "http://localhost:3000", "http://localhost:5173"],
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -23,6 +22,16 @@ app.use(express.json());
 // Store active groups and users
 const activeGroups = new Map();
 const userSockets = new Map();
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    activeGroups: activeGroups.size,
+    connectedUsers: userSockets.size,
+    timestamp: new Date().toISOString()
+  });
+});
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
@@ -152,30 +161,12 @@ io.on('connection', (socket) => {
   });
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    activeGroups: activeGroups.size,
-    connectedUsers: userSockets.size 
-  });
-});
-
-app.get('/test-db', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT NOW()');
-    res.json({ message: 'Database connected!', time: result.rows[0] });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Database connection failed' });
-  }
-});
-
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`WebSocket server running on port ${PORT}`);
   console.log(`Health check available at http://localhost:${PORT}/health`);
+  console.log('CORS enabled for:', ["http://localhost:8080", "http://localhost:3000", "http://localhost:5173"]);
 });
 
 module.exports = { app, server, io };

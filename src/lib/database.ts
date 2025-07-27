@@ -615,6 +615,15 @@ class KCAUDatabase {
     return this.groups.filter(g => g.unitId === unitId);
   }
 
+  async getGroupsByUnitIncludingGeneral(unitId: string): Promise<Group[]> {
+    // Include both unit-specific groups and general groups from the same course
+    const unit = await this.getUnitById(unitId);
+    if (!unit) return [];
+    
+    return this.groups.filter(g => 
+      g.unitId === unitId || (g.unitId === "" && g.courseId === unit.courseId)
+    );
+  }
   async getGroupsByStudent(studentId: string): Promise<Group[]> {
     return this.groups.filter(g => 
       g.members.some(member => member.userId === studentId)
