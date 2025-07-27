@@ -35,9 +35,7 @@ const Landing = () => {
 
       {/* Hero Section */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-header/95 to-primary/80">
-          <div className="absolute inset-0 bg-gradient-to-r from-header/90 to-header/70"></div>
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-r from-header/95 to-primary/80"></div>
         
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 lg:py-32">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
@@ -62,12 +60,11 @@ const Landing = () => {
             </div>
             
             <div className="relative animate-scale-in">
-              <div className="w-full h-96 bg-gradient-to-br from-primary/20 to-accent/20 rounded-2xl shadow-glow flex items-center justify-center border border-primary/20">
-                <div className="text-center">
-                  <Users className="w-24 h-24 text-primary mx-auto mb-4" />
-                  <p className="text-white/80 text-lg">Students Collaborating</p>
-                </div>
-              </div>
+              <img 
+                src="https://images.pexels.com/photos/1595391/pexels-photo-1595391.jpeg?auto=compress&cs=tinysrgb&w=800" 
+                alt="Students collaborating on projects" 
+                className="w-full h-96 object-cover rounded-2xl shadow-glow border border-primary/20"
+              />
             </div>
           </div>
         </div>

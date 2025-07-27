@@ -17,7 +17,8 @@ const Register = () => {
     password: "",
     confirmPassword: "",
     role: "student",
-    course: ""
+    course: "",
+    semester: ""
   });
   const [isLoading, setIsLoading] = useState(false);
   const [courses, setCourses] = useState<any[]>([]);
@@ -47,10 +48,10 @@ const Register = () => {
       return;
     }
 
-    if (formData.role === 'student' && !formData.course) {
+    if (formData.role === 'student' && (!formData.course || !formData.semester)) {
       toast({
-        title: "Course Required",
-        description: "Please select your course of study.",
+        title: "Required Fields Missing",
+        description: "Please select your course and semester.",
         variant: "destructive"
       });
       setIsLoading(false);
@@ -63,7 +64,8 @@ const Register = () => {
         email: formData.email,
         password: formData.password, // In production, hash this
         role: formData.role as 'student' | 'lecturer',
-        course: formData.role === 'student' ? formData.course : undefined
+        course: formData.role === 'student' ? formData.course : undefined,
+        semester: formData.role === 'student' ? formData.semester : undefined
       });
 
       if (result.success && result.user) {
@@ -73,6 +75,9 @@ const Register = () => {
         localStorage.setItem("userEmail", result.user.email);
         if (result.user.course) {
           localStorage.setItem("userCourse", result.user.course);
+        }
+        if (result.user.semester) {
+          localStorage.setItem("userSemester", result.user.semester);
         }
         
         toast({
@@ -118,6 +123,12 @@ const Register = () => {
       return "Format: NNNN@lecturer.kcau.ac.ke (NNNN = 4-digit staff number)";
     }
   };
+
+  const semesters = [
+    { value: "JAN-APRIL", label: "JAN - APRIL" },
+    { value: "MAY-AUG", label: "MAY - AUG" },
+    { value: "SEPT-DEC", label: "SEPT - DEC" }
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-card flex items-center justify-center px-4 py-8">
@@ -181,21 +192,39 @@ const Register = () => {
               </div>
 
               {formData.role === 'student' && (
-                <div className="space-y-2">
-                  <Label htmlFor="course" className="text-foreground">Course of Study</Label>
-                  <Select value={formData.course} onValueChange={(value) => handleInputChange("course", value)}>
-                    <SelectTrigger className="bg-card/50 border-primary/20 focus:border-primary">
-                      <SelectValue placeholder="Select your course" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {courses.map((course) => (
-                        <SelectItem key={course.id} value={course.id}>
-                          {course.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="course" className="text-foreground">Course of Study</Label>
+                    <Select value={formData.course} onValueChange={(value) => handleInputChange("course", value)}>
+                      <SelectTrigger className="bg-card/50 border-primary/20 focus:border-primary">
+                        <SelectValue placeholder="Select your course" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {courses.map((course) => (
+                          <SelectItem key={course.id} value={course.id}>
+                            {course.name} ({course.code})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="semester" className="text-foreground">Current Semester</Label>
+                    <Select value={formData.semester} onValueChange={(value) => handleInputChange("semester", value)}>
+                      <SelectTrigger className="bg-card/50 border-primary/20 focus:border-primary">
+                        <SelectValue placeholder="Select your semester" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {semesters.map((semester) => (
+                          <SelectItem key={semester.value} value={semester.value}>
+                            {semester.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
               )}
 
               <div className="space-y-2">

@@ -1,4 +1,6 @@
 // Enhanced Database schema and management for KCAU University system
+import { v4 as uuidv4 } from 'uuid';
+
 export interface User {
   id: string;
   name: string;
@@ -7,6 +9,7 @@ export interface User {
   role: 'student' | 'lecturer';
   course?: string;
   yearOfAdmission?: number; // For students
+  semester?: string; // Current semester for students
   avatar?: string;
   isOnline: boolean;
   lastSeen: Date;
@@ -33,6 +36,7 @@ export interface Unit {
   semester: string;
   credits: number;
   enrolledStudents: string[]; // Student IDs
+  pendingEnrollments: EnrollmentRequest[]; // Pending student requests
   assignments: Assignment[];
   createdAt: Date;
   isActive: boolean;
@@ -185,6 +189,7 @@ export interface EnrollmentRequest {
   requestedAt: Date;
   processedAt?: Date;
   processedBy?: string;
+  message?: string;
 }
 
 // Enhanced Database class with proper user management
@@ -198,6 +203,7 @@ class KCAUDatabase {
 
   constructor() {
     this.initializeDefaultCourses();
+    this.loadFromStorage();
   }
 
   private initializeDefaultCourses() {
@@ -205,45 +211,71 @@ class KCAUDatabase {
     this.courses = [
       {
         id: '1',
-        name: 'Computer Science',
-        code: 'CS',
-        description: 'Bachelor of Science in Computer Science',
+        name: 'Bachelor of Science in Gaming and Animation Technology',
+        code: 'BGAT',
+        description: 'Comprehensive program in game development and animation',
         department: 'School of Computing and Information Technology',
         createdAt: new Date()
       },
       {
         id: '2',
-        name: 'Information Technology',
-        code: 'IT',
-        description: 'Bachelor of Science in Information Technology',
+        name: 'Bachelor of Science In Data Science',
+        code: 'BDS',
+        description: 'Advanced program in data analytics and machine learning',
         department: 'School of Computing and Information Technology',
         createdAt: new Date()
       },
       {
         id: '3',
-        name: 'Software Engineering',
-        code: 'SE',
-        description: 'Bachelor of Science in Software Engineering',
+        name: 'Bachelor of Science in Information Security and Forensics',
+        code: 'BISF',
+        description: 'Specialized program in cybersecurity and digital forensics',
         department: 'School of Computing and Information Technology',
         createdAt: new Date()
       },
       {
         id: '4',
-        name: 'Business Administration',
-        code: 'BA',
-        description: 'Bachelor of Business Administration',
-        department: 'School of Business',
+        name: 'Bachelor of Science in Software Development',
+        code: 'BSD',
+        description: 'Professional software development and engineering program',
+        department: 'School of Computing and Information Technology',
         createdAt: new Date()
       },
       {
         id: '5',
-        name: 'Accounting',
-        code: 'ACC',
-        description: 'Bachelor of Commerce in Accounting',
-        department: 'School of Business',
+        name: 'Bachelor of Science in Applied Computing',
+        code: 'BAC',
+        description: 'Practical computing applications and solutions',
+        department: 'School of Computing and Information Technology',
         createdAt: new Date()
       }
     ];
+  }
+
+  private saveToStorage() {
+    localStorage.setItem('kcau_users', JSON.stringify(this.users));
+    localStorage.setItem('kcau_units', JSON.stringify(this.units));
+    localStorage.setItem('kcau_groups', JSON.stringify(this.groups));
+    localStorage.setItem('kcau_notifications', JSON.stringify(this.notifications));
+    localStorage.setItem('kcau_enrollment_requests', JSON.stringify(this.enrollmentRequests));
+  }
+
+  private loadFromStorage() {
+    try {
+      const users = localStorage.getItem('kcau_users');
+      const units = localStorage.getItem('kcau_units');
+      const groups = localStorage.getItem('kcau_groups');
+      const notifications = localStorage.getItem('kcau_notifications');
+      const enrollmentRequests = localStorage.getItem('kcau_enrollment_requests');
+
+      if (users) this.users = JSON.parse(users);
+      if (units) this.units = JSON.parse(units);
+      if (groups) this.groups = JSON.parse(groups);
+      if (notifications) this.notifications = JSON.parse(notifications);
+      if (enrollmentRequests) this.enrollmentRequests = JSON.parse(enrollmentRequests);
+    } catch (error) {
+      console.error('Error loading from storage:', error);
+    }
   }
 
   // Email validation functions
@@ -307,7 +339,7 @@ class KCAUDatabase {
 
       const newUser: User = {
         ...userData,
-        id: Date.now().toString(),
+        id: uuidv4(),
         yearOfAdmission: validation.yearOfAdmission,
         createdAt: new Date(),
         isOnline: false,
@@ -316,6 +348,7 @@ class KCAUDatabase {
       };
 
       this.users.push(newUser);
+      this.saveToStorage();
       return { success: true, user: newUser };
       
     } else if (userData.role === 'lecturer') {
@@ -331,7 +364,7 @@ class KCAUDatabase {
 
       const newUser: User = {
         ...userData,
-        id: Date.now().toString(),
+        id: uuidv4(),
         createdAt: new Date(),
         isOnline: false,
         lastSeen: new Date(),
@@ -339,6 +372,7 @@ class KCAUDatabase {
       };
 
       this.users.push(newUser);
+      this.saveToStorage();
       return { success: true, user: newUser };
     }
 
@@ -355,6 +389,7 @@ class KCAUDatabase {
     // Update user online status
     user.isOnline = true;
     user.lastSeen = new Date();
+    this.saveToStorage();
 
     return { success: true, user };
   }
@@ -377,21 +412,27 @@ class KCAUDatabase {
   }
 
   // Unit management methods
-  async createUnit(unitData: Omit<Unit, 'id' | 'createdAt' | 'enrolledStudents' | 'assignments' | 'isActive'>): Promise<Unit> {
+  async createUnit(unitData: Omit<Unit, 'id' | 'createdAt' | 'enrolledStudents' | 'assignments' | 'isActive' | 'pendingEnrollments'>): Promise<Unit> {
     const newUnit: Unit = {
       ...unitData,
-      id: Date.now().toString(),
+      id: uuidv4(),
       enrolledStudents: [],
+      pendingEnrollments: [],
       assignments: [],
       createdAt: new Date(),
       isActive: true
     };
     this.units.push(newUnit);
+    this.saveToStorage();
     return newUnit;
   }
 
   async getUnits(): Promise<Unit[]> {
     return this.units.filter(u => u.isActive);
+  }
+
+  async getUnitById(id: string): Promise<Unit | null> {
+    return this.units.find(u => u.id === id && u.isActive) || null;
   }
 
   async getUnitsByLecturer(lecturerId: string): Promise<Unit[]> {
@@ -404,6 +445,17 @@ class KCAUDatabase {
 
   async getUnitsByCourse(courseId: string): Promise<Unit[]> {
     return this.units.filter(u => u.courseId === courseId && u.isActive);
+  }
+
+  async getAvailableUnitsForStudent(studentId: string): Promise<Unit[]> {
+    const student = await this.getUser(studentId);
+    if (!student || student.role !== 'student') return [];
+
+    return this.units.filter(u => 
+      u.isActive && 
+      u.courseId === student.course && 
+      !u.enrolledStudents.includes(studentId)
+    );
   }
 
   // Student enrollment methods
@@ -427,6 +479,9 @@ class KCAUDatabase {
     if (!unit.enrolledStudents.includes(studentId)) {
       unit.enrolledStudents.push(studentId);
       
+      // Remove any pending enrollment request
+      unit.pendingEnrollments = unit.pendingEnrollments.filter(req => req.studentId !== studentId);
+      
       // Create notification for student
       await this.createNotification({
         userId: studentId,
@@ -437,37 +492,123 @@ class KCAUDatabase {
         priority: 'medium'
       });
       
+      this.saveToStorage();
       return true;
     }
     return false;
   }
 
-  async removeStudentFromUnit(unitId: string, studentId: string): Promise<boolean> {
+  async requestEnrollment(unitId: string, studentId: string, message?: string): Promise<{ success: boolean; error?: string }> {
     const unit = this.units.find(u => u.id === unitId);
-    if (!unit) return false;
+    const student = this.users.find(u => u.id === studentId && u.role === 'student');
     
-    const index = unit.enrolledStudents.indexOf(studentId);
-    if (index > -1) {
-      unit.enrolledStudents.splice(index, 1);
-      return true;
+    if (!unit || !student) {
+      return { success: false, error: 'Unit or student not found' };
     }
-    return false;
+
+    // Check if already enrolled
+    if (unit.enrolledStudents.includes(studentId)) {
+      return { success: false, error: 'Already enrolled in this unit' };
+    }
+
+    // Check if request already exists
+    if (unit.pendingEnrollments.find(req => req.studentId === studentId && req.status === 'pending')) {
+      return { success: false, error: 'Enrollment request already pending' };
+    }
+
+    // Check if student is from the same course
+    if (student.course !== unit.courseId) {
+      return { success: false, error: 'You can only enroll in units for your course' };
+    }
+
+    const enrollmentRequest: EnrollmentRequest = {
+      id: uuidv4(),
+      studentId,
+      unitId,
+      status: 'pending',
+      requestedAt: new Date(),
+      message
+    };
+
+    unit.pendingEnrollments.push(enrollmentRequest);
+
+    // Notify lecturer
+    await this.createNotification({
+      userId: unit.lecturerId,
+      type: 'enrollment',
+      title: 'New Enrollment Request',
+      message: `${student.name} has requested to enroll in ${unit.code}`,
+      read: false,
+      priority: 'medium'
+    });
+
+    this.saveToStorage();
+    return { success: true };
+  }
+
+  async processEnrollmentRequest(requestId: string, lecturerId: string, approve: boolean): Promise<{ success: boolean; error?: string }> {
+    const unit = this.units.find(u => 
+      u.lecturerId === lecturerId && 
+      u.pendingEnrollments.find(req => req.id === requestId)
+    );
+
+    if (!unit) {
+      return { success: false, error: 'Request not found or unauthorized' };
+    }
+
+    const requestIndex = unit.pendingEnrollments.findIndex(req => req.id === requestId);
+    if (requestIndex === -1) {
+      return { success: false, error: 'Request not found' };
+    }
+
+    const request = unit.pendingEnrollments[requestIndex];
+    request.status = approve ? 'approved' : 'rejected';
+    request.processedAt = new Date();
+    request.processedBy = lecturerId;
+
+    if (approve) {
+      // Enroll the student
+      unit.enrolledStudents.push(request.studentId);
+    }
+
+    // Notify student
+    const student = await this.getUser(request.studentId);
+    if (student) {
+      await this.createNotification({
+        userId: request.studentId,
+        type: 'enrollment',
+        title: approve ? 'Enrollment Approved' : 'Enrollment Rejected',
+        message: approve 
+          ? `Your enrollment request for ${unit.code} has been approved`
+          : `Your enrollment request for ${unit.code} has been rejected`,
+        read: false,
+        priority: 'high'
+      });
+    }
+
+    this.saveToStorage();
+    return { success: true };
   }
 
   // Group management methods
   async createGroup(groupData: Omit<Group, 'id' | 'createdAt' | 'lastActivity'>): Promise<Group> {
     const newGroup: Group = {
       ...groupData,
-      id: Date.now().toString(),
+      id: uuidv4(),
       createdAt: new Date(),
       lastActivity: new Date()
     };
     this.groups.push(newGroup);
+    this.saveToStorage();
     return newGroup;
   }
 
   async getGroups(): Promise<Group[]> {
     return this.groups;
+  }
+
+  async getGroupById(id: string): Promise<Group | null> {
+    return this.groups.find(g => g.id === id) || null;
   }
 
   async getGroupsByUnit(unitId: string): Promise<Group[]> {
@@ -523,6 +664,7 @@ class KCAUDatabase {
     });
     
     group.lastActivity = new Date();
+    this.saveToStorage();
     return { success: true };
   }
 
@@ -534,10 +676,11 @@ class KCAUDatabase {
   async createNotification(notification: Omit<Notification, 'id' | 'createdAt'>): Promise<Notification> {
     const newNotification: Notification = {
       ...notification,
-      id: Date.now().toString(),
+      id: uuidv4(),
       createdAt: new Date()
     };
     this.notifications.push(newNotification);
+    this.saveToStorage();
     return newNotification;
   }
 
@@ -545,6 +688,7 @@ class KCAUDatabase {
     const notification = this.notifications.find(n => n.id === id);
     if (notification) {
       notification.read = true;
+      this.saveToStorage();
       return true;
     }
     return false;
