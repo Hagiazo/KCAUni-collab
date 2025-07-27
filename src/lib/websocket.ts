@@ -34,9 +34,13 @@ class WebSocketManager {
 
   connect(groupId: string, userId: string, userName: string) {
     // In production, replace with your WebSocket server URL
-    this.socket = io('ws://localhost:3001', {
+    this.socket = io('http://localhost:3001', {
       transports: ['websocket'],
-      forceNew: true
+      forceNew: true,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+      timeout: 20000
     });
 
     this.groupId = groupId;
@@ -59,7 +63,18 @@ class WebSocketManager {
     this.socket.on('connect_error', (error) => {
       console.warn('WebSocket connection failed, falling back to local mode:', error);
       // Fallback to local storage for offline mode
+      this.handleLocalFallback();
     });
+    
+    this.socket.on('reconnect', (attemptNumber) => {
+      console.log('Reconnected to WebSocket server after', attemptNumber, 'attempts');
+      this.joinGroup(groupId);
+    });
+  }
+
+  private handleLocalFallback() {
+    // Implement local storage fallback for offline collaboration
+    console.log('Using local storage fallback mode');
   }
 
   disconnect() {
