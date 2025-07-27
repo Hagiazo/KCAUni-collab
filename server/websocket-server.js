@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
+const pool = require('./db');
+
 
 const app = express();
 const server = http.createServer(app);
@@ -158,6 +160,17 @@ app.get('/health', (req, res) => {
     connectedUsers: userSockets.size 
   });
 });
+
+app.get('/test-db', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT NOW()');
+    res.json({ message: 'Database connected!', time: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Database connection failed' });
+  }
+});
+
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
