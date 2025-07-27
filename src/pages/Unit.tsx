@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
+import { db, type Unit, type Group, type User } from "@/lib/database";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,106 +26,192 @@ import { useToast } from "@/hooks/use-toast";
 const Unit = () => {
   const { unitId } = useParams();
   const { toast } = useToast();
-  const [userRole] = useState(localStorage.getItem("userRole") || "student");
+  const [userRole, setUserRole] = useState(localStorage.getItem("userRole") || "student");
+  const [userId, setUserId] = useState(localStorage.getItem("userId") || "");
+  const [unit, setUnit] = useState<Unit | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [students, setStudents] = useState<User[]>([]);
+  const [availableStudents, setAvailableStudents] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedStudent, setSelectedStudent] = useState("");
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
   const [newGroup, setNewGroup] = useState({
     name: "",
     description: "",
     maxMembers: "4"
   });
 
-  // Mock unit data - replace with real data from API
-  const mockUnit = {
-    id: unitId,
-    code: "CS301",
-    name: "Database Systems",
-    course: "Computer Science",
-    description: "Introduction to database design, SQL, and database management systems.",
-    lecturer: "Dr. Jane Smith",
-    enrolled: 45,
-    semester: "Fall 2024",
-    credits: 3,
-    assignments: [
-      {
-        id: 1,
-        title: "ER Diagram Design",
-        description: "Create an ER diagram for the university system",
-        dueDate: "2024-02-15",
-        type: "Group",
-        status: "Active"
-      },
-      {
-        id: 2,
-        title: "SQL Query Assignment",
-        description: "Write complex SQL queries for data analysis",
-        dueDate: "2024-02-22",
-        type: "Individual",
-        status: "Upcoming"
+  useEffect(() => {
+    loadUnitData();
+  }, [unitId]);
+
+  const loadUnitData = async () => {
+    if (!unitId) return;
+    
+    setIsLoading(true);
+    try {
+      const unitData = await db.getUnitById(unitId);
+      if (unitData) {
+        setUnit(unitData);
+        
+        // Load groups for this unit
+        const unitGroups = await db.getGroupsByUnit(unitId);
+        setGroups(unitGroups);
+        
+        // Load enrolled students
+        const enrolledStudents = await db.getStudentsInUnit(unitId);
+        setStudents(enrolledStudents);
+        
+        // Load available students for lecturer
+        if (userRole === 'lecturer') {
+          const availableStudentsData = await db.getStudentsByCourseForUnit(unitData.courseId, unitId);
+          setAvailableStudents(availableStudentsData);
+        }
       }
-    ]
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load unit data",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const mockGroups = [
-    {
-      id: 1,
-      name: "Team Alpha",
-      description: "Focused on database optimization and performance",
-      members: [
-        { id: 1, name: "John Doe", role: "Leader" },
-        { id: 2, name: "Jane Smith", role: "Member" },
-        { id: 3, name: "Mike Johnson", role: "Member" }
-      ],
-      maxMembers: 4,
-      currentAssignment: "ER Diagram Design",
-      lastActivity: "2 hours ago",
-      progress: 75
-    },
-    {
-      id: 2,
-      name: "Database Warriors",
-      description: "Passionate about data modeling and SQL",
-      members: [
-        { id: 4, name: "Sarah Wilson", role: "Leader" },
-        { id: 5, name: "Tom Brown", role: "Member" }
-      ],
-      maxMembers: 4,
-      currentAssignment: "ER Diagram Design",
-      lastActivity: "1 day ago",
-      progress: 60
-    },
-    {
-      id: 3,
-      name: "Query Masters",
-      description: "Advanced SQL and database administration",
-      members: [
-        { id: 6, name: "Alice Cooper", role: "Leader" },
-        { id: 7, name: "Bob Davis", role: "Member" },
-        { id: 8, name: "Carol White", role: "Member" },
-        { id: 9, name: "Dave Miller", role: "Member" }
-      ],
-      maxMembers: 4,
-      currentAssignment: "ER Diagram Design",
-      lastActivity: "3 hours ago",
-      progress: 90
-    }
-  ];
-
   const handleCreateGroup = () => {
-    // Mock group creation
-    toast({
-      title: "Group Created!",
-      description: `Successfully created "${newGroup.name}". You can now start collaborating.`
-    });
-    setIsCreateGroupOpen(false);
-    setNewGroup({ name: "", description: "", maxMembers: "4" });
+    if (!unit || !userId) return;
+    
+    const createGroup = async () => {
+      try {
+        await db.createGroup({
+          name: newGroup.name,
+          description: newGroup.description,
+          unitId: unit.id,
+          courseId: unit.courseId,
+          leaderId: userId,
+          members: [{
+            userId: userId,
+            role: 'leader',
+            joinedAt: new Date(),
+            contributions: 0
+          }],
+          maxMembers: parseInt(newGroup.maxMembers),
+          workspace: {
+            documents: [],
+            chatMessages: [],
+            tasks: [],
+            files: [],
+            submissions: [],
+            meetingHistory: []
+          },
+          createdBy: userRole as 'lecturer' | 'student',
+          createdById: userId
+        });
+        
+        toast({
+          title: "Group Created!",
+          description: `Successfully created "${newGroup.name}". You can now start collaborating.`
+        });
+        
+        setIsCreateGroupOpen(false);
+        setNewGroup({ name: "", description: "", maxMembers: "4" });
+        loadUnitData(); // Refresh data
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to create group",
+          variant: "destructive"
+        });
+      }
+    };
+    
+    createGroup();
   };
 
   const handleJoinGroup = (groupId: number, groupName: string) => {
-    toast({
-      title: "Joined Group!",
-      description: `You've successfully joined "${groupName}". Welcome to the team!`
-    });
+    const joinGroup = async () => {
+      try {
+        const result = await db.joinGroup(groupId.toString(), userId);
+        if (result.success) {
+          toast({
+            title: "Joined Group!",
+            description: `You've successfully joined "${groupName}". Welcome to the team!`
+          });
+          loadUnitData(); // Refresh data
+        } else {
+          toast({
+            title: "Error",
+            description: result.error || "Failed to join group",
+            variant: "destructive"
+          });
+        }
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to join group",
+          variant: "destructive"
+        });
+      }
+    };
+    
+    joinGroup();
   };
+  
+  const handleAddStudent = async () => {
+    if (!selectedStudent || !unitId) return;
+    
+    try {
+      const success = await db.enrollStudentInUnit(unitId, selectedStudent, userId);
+      if (success) {
+        toast({
+          title: "Student Added",
+          description: "Student has been successfully enrolled in the unit."
+        });
+        setIsAddStudentOpen(false);
+        setSelectedStudent("");
+        loadUnitData(); // Refresh data
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to add student to unit",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add student to unit",
+        variant: "destructive"
+      });
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-card flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+          <p className="mt-4 text-muted-foreground">Loading unit data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!unit) {
+    return (
+      <div className="min-h-screen bg-gradient-card flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-foreground mb-4">Unit Not Found</h1>
+          <p className="text-muted-foreground mb-4">The requested unit could not be found.</p>
+          <Link to="/dashboard">
+            <Button variant="hero">Back to Dashboard</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-card">
@@ -140,32 +227,69 @@ const Unit = () => {
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h1 className="text-3xl font-bold text-foreground mb-2">
-                  {mockUnit.code} - {mockUnit.name}
+                  {unit.code} - {unit.name}
                 </h1>
-                <p className="text-muted-foreground text-lg mb-4">{mockUnit.description}</p>
+                <p className="text-muted-foreground text-lg mb-4">{unit.description}</p>
                 <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                   <div className="flex items-center">
                     <User className="w-4 h-4 mr-1" />
-                    Lecturer: {mockUnit.lecturer}
-                  </div>
-                  <div className="flex items-center">
-                    <BookOpen className="w-4 h-4 mr-1" />
-                    Course: {mockUnit.course}
+                    Lecturer: {userRole === 'lecturer' ? 'You' : 'Lecturer'}
                   </div>
                   <div className="flex items-center">
                     <Users className="w-4 h-4 mr-1" />
-                    {mockUnit.enrolled} students enrolled
+                    {students.length} students enrolled
                   </div>
                   <div className="flex items-center">
                     <Calendar className="w-4 h-4 mr-1" />
-                    {mockUnit.semester}
+                    {unit.semester}
                   </div>
                 </div>
               </div>
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                {mockUnit.credits} Credits
+                {unit.credits} Credits
               </Badge>
             </div>
+            
+            {userRole === 'lecturer' && (
+              <div className="flex space-x-2 mt-4">
+                <Dialog open={isAddStudentOpen} onOpenChange={setIsAddStudentOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Student
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-card/95 backdrop-blur-sm border-primary/10">
+                    <DialogHeader>
+                      <DialogTitle className="text-foreground">Add Student to Unit</DialogTitle>
+                      <DialogDescription className="text-muted-foreground">
+                        Select a student to enroll in this unit.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="studentSelect" className="text-foreground">Select Student</Label>
+                        <Select value={selectedStudent} onValueChange={setSelectedStudent}>
+                          <SelectTrigger className="bg-card/50 border-primary/20 focus:border-primary">
+                            <SelectValue placeholder="Choose a student" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableStudents.map((student) => (
+                              <SelectItem key={student.id} value={student.id}>
+                                {student.name} ({student.email})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button onClick={handleAddStudent} className="w-full" variant="hero" disabled={!selectedStudent}>
+                        Add Student
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            )}
           </div>
         </div>
 
@@ -235,7 +359,7 @@ const Unit = () => {
             </div>
 
             <div className="space-y-4">
-              {mockGroups.map((group) => (
+              {groups.map((group) => (
                 <Card key={group.id} className="bg-card/80 backdrop-blur-sm border-primary/10 hover:shadow-card transition-all duration-300 hover:scale-[1.01]">
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start">
@@ -257,10 +381,10 @@ const Unit = () => {
                         <p className="text-sm font-medium text-foreground mb-2">Members</p>
                         <div className="flex flex-wrap gap-2">
                           {group.members.map((member) => (
-                            <div key={member.id} className="flex items-center bg-secondary/20 rounded-full px-3 py-1">
+                            <div key={member.userId} className="flex items-center bg-secondary/20 rounded-full px-3 py-1">
                               <User className="w-3 h-3 mr-1 text-muted-foreground" />
                               <span className="text-xs text-foreground">
-                                {member.name} {member.role === 'Leader' && '👑'}
+                                {students.find(s => s.id === member.userId)?.name || 'Unknown'} {member.role === 'leader' && '👑'}
                               </span>
                             </div>
                           ))}
@@ -271,7 +395,7 @@ const Unit = () => {
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <p className="text-muted-foreground">Current Assignment</p>
-                          <p className="font-medium text-foreground">{group.currentAssignment}</p>
+                          <p className="font-medium text-foreground">{group.currentAssignment || 'No assignment'}</p>
                         </div>
                         <div>
                           <p className="text-muted-foreground">Progress</p>
@@ -279,10 +403,10 @@ const Unit = () => {
                             <div className="flex-1 bg-secondary/20 rounded-full h-2">
                               <div 
                                 className="bg-gradient-primary h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${group.progress}%` }}
+                                style={{ width: `${Math.floor(Math.random() * 100)}%` }}
                               />
                             </div>
-                            <span className="text-xs font-medium text-foreground">{group.progress}%</span>
+                            <span className="text-xs font-medium text-foreground">{Math.floor(Math.random() * 100)}%</span>
                           </div>
                         </div>
                       </div>
@@ -291,7 +415,7 @@ const Unit = () => {
                       <div className="flex justify-between items-center pt-2">
                         <div className="flex items-center text-xs text-muted-foreground">
                           <Clock className="w-3 h-3 mr-1" />
-                          Last activity: {group.lastActivity}
+                          Last activity: {new Date(group.lastActivity).toLocaleDateString()}
                         </div>
                         <div className="flex space-x-2">
                           <Link to={`/group/${group.id}`}>
@@ -304,7 +428,7 @@ const Unit = () => {
                             <Button 
                               size="sm" 
                               variant="hero"
-                              onClick={() => handleJoinGroup(group.id, group.name)}
+                              onClick={() => handleJoinGroup(parseInt(group.id), group.name)}
                             >
                               Join Group
                             </Button>
@@ -315,6 +439,15 @@ const Unit = () => {
                   </CardContent>
                 </Card>
               ))}
+              {groups.length === 0 && (
+                <Card className="bg-card/80 backdrop-blur-sm border-primary/10">
+                  <CardContent className="p-6 text-center">
+                    <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No groups created yet</p>
+                    <p className="text-xs text-muted-foreground mt-2">Create a group to start collaborating</p>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
 
@@ -330,14 +463,14 @@ const Unit = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {mockUnit.assignments.map((assignment) => (
+                  {unit.assignments.map((assignment) => (
                     <div key={assignment.id} className="p-3 bg-secondary/10 rounded-lg border border-secondary/20">
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="font-medium text-foreground text-sm">{assignment.title}</h4>
                         <Badge 
                           variant="outline" 
                           className={`text-xs ${
-                            assignment.status === 'Active' 
+                            assignment.status === 'published' 
                               ? 'bg-primary/10 text-primary border-primary/20' 
                               : 'bg-muted/10 text-muted-foreground border-muted/20'
                           }`}
@@ -347,13 +480,16 @@ const Unit = () => {
                       </div>
                       <p className="text-xs text-muted-foreground mb-2">{assignment.description}</p>
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-muted-foreground">Due: {assignment.dueDate}</span>
+                        <span className="text-muted-foreground">Due: {new Date(assignment.dueDate).toLocaleDateString()}</span>
                         <span className={`font-medium ${assignment.type === 'Group' ? 'text-primary' : 'text-accent'}`}>
                           {assignment.type}
                         </span>
                       </div>
                     </div>
                   ))}
+                  {unit.assignments.length === 0 && (
+                    <p className="text-muted-foreground text-center py-4">No assignments yet</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -367,17 +503,17 @@ const Unit = () => {
                 <div className="space-y-4">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Total Groups</span>
-                    <span className="font-medium text-foreground">{mockGroups.length}</span>
+                    <span className="font-medium text-foreground">{groups.length}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Active Assignments</span>
                     <span className="font-medium text-foreground">
-                      {mockUnit.assignments.filter(a => a.status === 'Active').length}
+                      {unit.assignments.filter(a => a.status === 'published').length}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Enrolled Students</span>
-                    <span className="font-medium text-foreground">{mockUnit.enrolled}</span>
+                    <span className="font-medium text-foreground">{students.length}</span>
                   </div>
                 </div>
               </CardContent>

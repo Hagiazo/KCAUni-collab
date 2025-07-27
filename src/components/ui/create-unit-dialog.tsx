@@ -58,7 +58,7 @@ export const CreateUnitDialog = ({ lecturerId, onUnitCreated }: CreateUnitDialog
         description: formData.description || `${formData.name} course unit`,
         lecturerId,
         courseId: formData.courseId,
-        semester: formData.semester || "Fall 2024",
+        semester: formData.semester || "JAN-APRIL",
         credits: parseInt(formData.credits)
       });
 
@@ -151,9 +151,9 @@ export const CreateUnitDialog = ({ lecturerId, onUnitCreated }: CreateUnitDialog
                 <SelectValue placeholder="Select semester" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Fall 2024">Fall 2024</SelectItem>
-                <SelectItem value="Spring 2025">Spring 2025</SelectItem>
-                <SelectItem value="Summer 2025">Summer 2025</SelectItem>
+                <SelectItem value="JAN-APRIL">JAN-APRIL</SelectItem>
+                <SelectItem value="MAY-AUG">MAY-AUG</SelectItem>
+                <SelectItem value="SEPT-DEC">SEPT-DEC</SelectItem>
               </SelectContent>
             </Select>
           </div>
