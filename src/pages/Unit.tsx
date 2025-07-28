@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreateGroupDialog } from "@/components/ui/create-group-dialog";
-import { Users, Plus, MessageSquare, Calendar, FileText, ArrowLeft, Clock, User, BookOpen, Target, AlignCenter as AssignmentIcon } from "lucide-react";
+import { Users, Plus, MessageSquare, Calendar, FileText, ArrowLeft, Clock, User as UserIcon, BookOpen, Target, AlignCenter as AssignmentIcon, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Unit = () => {
@@ -225,7 +225,7 @@ const Unit = () => {
                 <p className="text-muted-foreground text-lg mb-4">{unit.description}</p>
                 <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                   <div className="flex items-center">
-                    <User className="w-4 h-4 mr-1" />
+                    <UserIcon className="w-4 h-4 mr-1" />
                     Lecturer: {userRole === 'lecturer' ? 'You' : 'Lecturer'}
                   </div>
                   <div className="flex items-center">
@@ -435,11 +435,20 @@ const Unit = () => {
                 <Card key={group.id} className="bg-card/80 backdrop-blur-sm border-primary/10 hover:shadow-card transition-all duration-300 hover:scale-[1.01]">
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle className="text-lg text-foreground mb-1">{group.name}</CardTitle>
+                        <CardDescription className="text-muted-foreground">
+                          {group.description || 'No description provided'}
                         </CardDescription>
                       </div>
-                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                        {unit.semester}
-                      </Badge>
+                      <div className="flex flex-col items-end space-y-2">
+                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                          {group.members.length}/{group.maxMembers} members
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          {group.status || 'Active'}
+                        </Badge>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -450,7 +459,7 @@ const Unit = () => {
                         <div className="flex flex-wrap gap-2">
                           {group.members.map((member) => (
                             <div key={member.userId} className="flex items-center bg-secondary/20 rounded-full px-3 py-1">
-                              <User className="w-3 h-3 mr-1 text-muted-foreground" />
+                              <UserIcon className="w-3 h-3 mr-1 text-muted-foreground" />
                               <span className="text-xs text-foreground">
                                 {students.find(s => s.id === member.userId)?.name || 'Unknown'} {member.role === 'leader' && '👑'}
                               </span>
