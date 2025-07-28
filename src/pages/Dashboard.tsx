@@ -197,6 +197,31 @@ const Dashboard = () => {
     }
   };
 
+  const handleJoinGroup = async (groupId: string, groupName: string) => {
+    try {
+      const result = await db.joinGroup(groupId, userId);
+      if (result.success) {
+        toast({
+          title: "Joined Group!",
+          description: `You've successfully joined "${groupName}". Welcome to the team!`
+        });
+        loadDashboardData(userRole, userId, userCourse); // Refresh data
+      } else {
+        toast({
+          title: "Error",
+          description: result.error || "Failed to join group",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to join group",
+        variant: "destructive"
+      });
+    }
+  };
+
   if (!userRole || !userName || !userId) {
     return <div>Loading...</div>;
   }
@@ -559,11 +584,22 @@ const Dashboard = () => {
                         <span className="text-xs text-muted-foreground">
                           Last activity: {new Date(group.lastActivity).toLocaleDateString()}
                         </span>
-                        <Link to={`/group/${group.id}`}>
-                          <Button variant="outline" size="sm">
-                            Open Workspace
-                          </Button>
-                        </Link>
+                        <div className="flex space-x-2">
+                          <Link to={`/group/${group.id}`}>
+                            <Button variant="outline" size="sm">
+                              Open Workspace
+                            </Button>
+                          </Link>
+                          {!group.members.find(m => m.userId === userId) && group.members.length < group.maxMembers && (
+                            <Button 
+                              size="sm" 
+                              variant="hero"
+                              onClick={() => handleJoinGroup(group.id, group.name)}
+                            >
+                              Join
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

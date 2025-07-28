@@ -429,6 +429,37 @@ class KCAUDatabase {
     return newUnit;
   }
 
+  // Assignment management methods
+  async createAssignment(assignmentData: Omit<Assignment, 'id' | 'createdAt'>): Promise<Assignment> {
+    const newAssignment: Assignment = {
+      ...assignmentData,
+      id: uuidv4(),
+      createdAt: new Date()
+    };
+    
+    // Add assignment to the unit
+    const unit = this.units.find(u => u.id === assignmentData.unitId);
+    if (unit) {
+      unit.assignments.push(newAssignment);
+      this.saveToStorage();
+    }
+    
+    return newAssignment;
+  }
+
+  async getAssignmentsByUnit(unitId: string): Promise<Assignment[]> {
+    const unit = this.units.find(u => u.id === unitId);
+    return unit?.assignments || [];
+  }
+
+  async getAssignmentById(assignmentId: string): Promise<Assignment | null> {
+    for (const unit of this.units) {
+      const assignment = unit.assignments.find(a => a.id === assignmentId);
+      if (assignment) return assignment;
+    }
+    return null;
+  }
+
   async getUnits(): Promise<Unit[]> {
     return this.units.filter(u => u.isActive);
   }

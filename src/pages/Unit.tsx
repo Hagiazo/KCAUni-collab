@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { db, type Unit, type Group, type User } from "@/lib/database";
+import { db, type Unit, type Group, type User, type Assignment } from "@/lib/database";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CreateGroupDialog } from "@/components/ui/create-group-dialog";
 import { 
   Users, 
   Plus, 
@@ -19,7 +20,8 @@ import {
   Clock,
   User,
   BookOpen,
-  Target
+  Target,
+  Assignment as AssignmentIcon
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -32,14 +34,18 @@ const Unit = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [students, setStudents] = useState<User[]>([]);
   const [availableStudents, setAvailableStudents] = useState<User[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState("");
-  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
-  const [newGroup, setNewGroup] = useState({
-    name: "",
+  const [isCreateAssignmentOpen, setIsCreateAssignmentOpen] = useState(false);
+  const [newAssignment, setNewAssignment] = useState({
+    title: "",
     description: "",
-    maxMembers: "4"
+    type: "group" as "individual" | "group",
+    dueDate: "",
+    maxMarks: "100",
+    instructions: ""
   });
 
   useEffect(() => {
@@ -63,6 +69,10 @@ const Unit = () => {
         const enrolledStudents = await db.getStudentsInUnit(unitId);
         setStudents(enrolledStudents);
         
+        // Load assignments
+        const unitAssignments = await db.getAssignmentsByUnit(unitId);
+        setAssignments(unitAssignments);
+        
         // Load available students for lecturer
         if (userRole === 'lecturer') {
           const availableStudentsData = await db.getStudentsByCourseForUnit(unitData.courseId, unitId);
@@ -80,60 +90,14 @@ const Unit = () => {
     }
   };
 
-  const handleCreateGroup = () => {
-    if (!unit || !userId) return;
-    
-    const createGroup = async () => {
-      try {
-        await db.createGroup({
-          name: newGroup.name,
-          description: newGroup.description,
-          unitId: unit.id,
-          courseId: unit.courseId,
-          leaderId: userId,
-          members: [{
-            userId: userId,
-            role: 'leader',
-            joinedAt: new Date(),
-            contributions: 0
-          }],
-          maxMembers: parseInt(newGroup.maxMembers),
-          workspace: {
-            documents: [],
-            chatMessages: [],
-            tasks: [],
-            files: [],
-            submissions: [],
-            meetingHistory: []
-          },
-          createdBy: userRole as 'lecturer' | 'student',
-          createdById: userId
-        });
-        
-        toast({
-          title: "Group Created!",
-          description: `Successfully created "${newGroup.name}". You can now start collaborating.`
-        });
-        
-        setIsCreateGroupOpen(false);
-        setNewGroup({ name: "", description: "", maxMembers: "4" });
-        loadUnitData(); // Refresh data
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to create group",
-          variant: "destructive"
-        });
-      }
-    };
-    
-    createGroup();
+  const handleGroupCreated = () => {
+    loadUnitData(); // Refresh data when a group is created
   };
 
-  const handleJoinGroup = (groupId: number, groupName: string) => {
+  const handleJoinGroup = (groupId: string, groupName: string) => {
     const joinGroup = async () => {
       try {
-        const result = await db.joinGroup(groupId.toString(), userId);
+        const result = await db.joinGroup(groupId, userId);
         if (result.success) {
           toast({
             title: "Joined Group!",
@@ -183,6 +147,46 @@ const Unit = () => {
       toast({
         title: "Error",
         description: "Failed to add student to unit",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleCreateAssignment = async () => {
+    if (!newAssignment.title.trim() || !newAssignment.dueDate || !unit) return;
+    
+    try {
+      await db.createAssignment({
+        title: newAssignment.title,
+        description: newAssignment.description,
+        unitId: unit.id,
+        type: newAssignment.type,
+        dueDate: new Date(newAssignment.dueDate),
+        maxMarks: parseInt(newAssignment.maxMarks),
+        instructions: newAssignment.instructions,
+        attachments: [],
+        status: 'published'
+      });
+      
+      toast({
+        title: "Assignment Created",
+        description: "Assignment has been successfully created and published."
+      });
+      
+      setIsCreateAssignmentOpen(false);
+      setNewAssignment({
+        title: "",
+        description: "",
+        type: "group",
+        dueDate: "",
+        maxMarks: "100",
+        instructions: ""
+      });
+      loadUnitData(); // Refresh data
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create assignment",
         variant: "destructive"
       });
     }
@@ -288,6 +292,106 @@ const Unit = () => {
                     </div>
                   </DialogContent>
                 </Dialog>
+                
+                <Dialog open={isCreateAssignmentOpen} onOpenChange={setIsCreateAssignmentOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="accent" size="sm">
+                      <AssignmentIcon className="w-4 h-4 mr-2" />
+                      Create Assignment
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-card/95 backdrop-blur-sm border-primary/10 max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="text-foreground">Create New Assignment</DialogTitle>
+                      <DialogDescription className="text-muted-foreground">
+                        Create an assignment for students in this unit.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="assignmentTitle" className="text-foreground">Assignment Title *</Label>
+                        <Input
+                          id="assignmentTitle"
+                          placeholder="Enter assignment title"
+                          value={newAssignment.title}
+                          onChange={(e) => setNewAssignment(prev => ({ ...prev, title: e.target.value }))}
+                          className="bg-card/50 border-primary/20 focus:border-primary"
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="assignmentDescription" className="text-foreground">Description</Label>
+                        <Textarea
+                          id="assignmentDescription"
+                          placeholder="Describe the assignment requirements"
+                          value={newAssignment.description}
+                          onChange={(e) => setNewAssignment(prev => ({ ...prev, description: e.target.value }))}
+                          className="bg-card/50 border-primary/20 focus:border-primary"
+                          rows={3}
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="assignmentType" className="text-foreground">Type</Label>
+                          <Select value={newAssignment.type} onValueChange={(value: "individual" | "group") => setNewAssignment(prev => ({ ...prev, type: value }))}>
+                            <SelectTrigger className="bg-card/50 border-primary/20 focus:border-primary">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="individual">Individual</SelectItem>
+                              <SelectItem value="group">Group</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="maxMarks" className="text-foreground">Max Marks</Label>
+                          <Input
+                            id="maxMarks"
+                            type="number"
+                            placeholder="100"
+                            value={newAssignment.maxMarks}
+                            onChange={(e) => setNewAssignment(prev => ({ ...prev, maxMarks: e.target.value }))}
+                            className="bg-card/50 border-primary/20 focus:border-primary"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="dueDate" className="text-foreground">Due Date *</Label>
+                        <Input
+                          id="dueDate"
+                          type="datetime-local"
+                          value={newAssignment.dueDate}
+                          onChange={(e) => setNewAssignment(prev => ({ ...prev, dueDate: e.target.value }))}
+                          className="bg-card/50 border-primary/20 focus:border-primary"
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="instructions" className="text-foreground">Instructions</Label>
+                        <Textarea
+                          id="instructions"
+                          placeholder="Detailed instructions for the assignment"
+                          value={newAssignment.instructions}
+                          onChange={(e) => setNewAssignment(prev => ({ ...prev, instructions: e.target.value }))}
+                          className="bg-card/50 border-primary/20 focus:border-primary"
+                          rows={4}
+                        />
+                      </div>
+                      
+                      <Button 
+                        onClick={handleCreateAssignment} 
+                        className="w-full" 
+                        variant="hero"
+                        disabled={!newAssignment.title.trim() || !newAssignment.dueDate}
+                      >
+                        Create Assignment
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
             )}
           </div>
@@ -299,62 +403,11 @@ const Unit = () => {
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-foreground">Groups</h2>
               {userRole === 'student' && (
-                <Dialog open={isCreateGroupOpen} onOpenChange={setIsCreateGroupOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="accent" size="sm">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create Group
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="bg-card/95 backdrop-blur-sm border-primary/10">
-                    <DialogHeader>
-                      <DialogTitle className="text-foreground">Create New Group</DialogTitle>
-                      <DialogDescription className="text-muted-foreground">
-                        Start a new collaboration group for this unit.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="groupName" className="text-foreground">Group Name</Label>
-                        <Input
-                          id="groupName"
-                          placeholder="Enter group name"
-                          value={newGroup.name}
-                          onChange={(e) => setNewGroup(prev => ({ ...prev, name: e.target.value }))}
-                          className="bg-card/50 border-primary/20 focus:border-primary"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="groupDescription" className="text-foreground">Description</Label>
-                        <Textarea
-                          id="groupDescription"
-                          placeholder="Describe your group's focus or goals"
-                          value={newGroup.description}
-                          onChange={(e) => setNewGroup(prev => ({ ...prev, description: e.target.value }))}
-                          className="bg-card/50 border-primary/20 focus:border-primary"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="maxMembers" className="text-foreground">Maximum Members</Label>
-                        <Select value={newGroup.maxMembers} onValueChange={(value) => setNewGroup(prev => ({ ...prev, maxMembers: value }))}>
-                          <SelectTrigger className="bg-card/50 border-primary/20 focus:border-primary">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="2">2 members</SelectItem>
-                            <SelectItem value="3">3 members</SelectItem>
-                            <SelectItem value="4">4 members</SelectItem>
-                            <SelectItem value="5">5 members</SelectItem>
-                            <SelectItem value="6">6 members</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <Button onClick={handleCreateGroup} className="w-full" variant="hero">
-                        Create Group
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                <CreateGroupDialog 
+                  unitId={unit.id}
+                  currentUserId={userId}
+                  onGroupCreated={handleGroupCreated}
+                />
               )}
             </div>
 
@@ -428,7 +481,7 @@ const Unit = () => {
                             <Button 
                               size="sm" 
                               variant="hero"
-                              onClick={() => handleJoinGroup(parseInt(group.id), group.name)}
+                              onClick={() => handleJoinGroup(group.id, group.name)}
                             >
                               Join Group
                             </Button>
@@ -463,7 +516,7 @@ const Unit = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {unit.assignments.map((assignment) => (
+                  {assignments.map((assignment) => (
                     <div key={assignment.id} className="p-3 bg-secondary/10 rounded-lg border border-secondary/20">
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="font-medium text-foreground text-sm">{assignment.title}</h4>
@@ -487,7 +540,7 @@ const Unit = () => {
                       </div>
                     </div>
                   ))}
-                  {unit.assignments.length === 0 && (
+                  {assignments.length === 0 && (
                     <p className="text-muted-foreground text-center py-4">No assignments yet</p>
                   )}
                 </div>
@@ -508,7 +561,7 @@ const Unit = () => {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Active Assignments</span>
                     <span className="font-medium text-foreground">
-                      {unit.assignments.filter(a => a.status === 'published').length}
+                      {assignments.filter(a => a.status === 'published').length}
                     </span>
                   </div>
                   <div className="flex justify-between">

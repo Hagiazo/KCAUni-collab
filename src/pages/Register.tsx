@@ -71,18 +71,23 @@ const Register = () => {
       });
 
       if (result.success && result.user) {
+        // Store user data in localStorage
         localStorage.setItem("userRole", result.user.role);
         localStorage.setItem("userName", result.user.name);
         localStorage.setItem("userId", result.user.id);
         localStorage.setItem("userEmail", result.user.email);
-        if (result.user.course) {
-          localStorage.setItem("userCourse", result.user.course);
-        }
-        if (result.user.semester) {
-          localStorage.setItem("userSemester", result.user.semester);
-        }
-        if (result.user.year) {
-          localStorage.setItem("userYear", result.user.year.toString());
+        
+        // Only store course, semester, and year for students
+        if (result.user.role === 'student') {
+          if (result.user.course) {
+            localStorage.setItem("userCourse", result.user.course);
+          }
+          if (result.user.semester) {
+            localStorage.setItem("userSemester", result.user.semester);
+          }
+          if (result.user.year) {
+            localStorage.setItem("userYear", result.user.year.toString());
+          }
         }
         
         toast({
@@ -94,7 +99,7 @@ const Register = () => {
       } else {
         toast({
           title: "Registration Failed",
-          description: "Please select your course, semester, and year.",
+          description: result.error || "Registration failed. Please try again.",
           variant: "destructive"
         });
       }

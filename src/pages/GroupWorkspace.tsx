@@ -13,7 +13,6 @@ import { CollaborativeEditor } from "@/components/ui/collaborative-editor";
 import { FileSharing } from "@/components/ui/file-sharing";
 import { RealtimeChat } from "@/components/ui/realtime-chat";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { VideoCall } from "@/components/ui/video-call";
 import { 
   ArrowLeft, 
   Users, 
@@ -31,11 +30,30 @@ import {
   Smile,
   GitBranch,
   Save,
-  History
+  History,
+  Video
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { wsManager } from "@/lib/websocket";
 import { db, type Group, type Unit, type User } from "@/lib/database";
+
+interface ChatMessage {
+  id: number;
+  sender: string;
+  message: string;
+  timestamp: string;
+  type: string;
+}
+
+interface Task {
+  id: number;
+  title: string;
+  description: string;
+  assignee: string;
+  status: string;
+  priority: string;
+  dueDate: string;
+}
 
 const GroupWorkspace = () => {
   const { groupId } = useParams();
@@ -54,7 +72,9 @@ const GroupWorkspace = () => {
   
   // State for different components
   const [document, setDocument] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatMessage, setChatMessage] = useState("");
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [newTask, setNewTask] = useState({ title: "", description: "", assignee: "" });
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [documentSaved, setDocumentSaved] = useState(true);
@@ -84,8 +104,9 @@ const GroupWorkspace = () => {
         setGroup(groupData);
 
         // Load unit data if group has a unit
+        let unitData = null;
         if (groupData.unitId) {
-          const unitData = await db.getUnitById(groupData.unitId);
+          unitData = await db.getUnitById(groupData.unitId);
           setUnit(unitData);
         }
 
@@ -191,9 +212,6 @@ ${memberDetails.filter(Boolean).map((member: any) =>
     }
   }, [group, members]);
 
-  // Initialize files with group-specific data
-  const [files] = useState(group?.workspace.files || []);
-
   // Handle Google Meet integration
   const handleVideoCall = () => {
     const meetUrl = `https://meet.google.com/new`;
@@ -205,9 +223,21 @@ ${memberDetails.filter(Boolean).map((member: any) =>
     });
   };
 
+  // Handle GitHub integration
+  const handleGitHub = () => {
+    const githubUrl = `https://github.com/new`;
+    window.open(githubUrl, '_blank');
+    
+    toast({
+      title: "GitHub Repository",
+      description: "GitHub has been opened in a new tab. Create or access your repository.",
+    });
+  };
+
   // Handle document content changes
   const handleDocumentChange = useCallback((content: string) => {
     setDocument(content);
+    setDocumentSaved(false);
   }, []);
 
   // Auto-save document

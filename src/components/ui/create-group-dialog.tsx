@@ -22,19 +22,30 @@ export const CreateGroupDialog = ({ unitId, currentUserId, onGroupCreated }: Cre
   const [description, setDescription] = useState("");
   const [maxMembers, setMaxMembers] = useState("4");
   const [invitedMembers, setInvitedMembers] = useState<User[]>([]);
-  const [searchEmail, setSearchEmail] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleInviteMember = async () => {
-    if (!searchEmail.trim()) return;
+  const handleSearchAndInvite = async () => {
+    if (!searchQuery.trim()) return;
 
     try {
-      const user = await db.getUserByEmail(searchEmail.trim());
+      // Search by email or admission number (for students)
+      let user = await db.getUserByEmail(searchQuery.trim());
+      
+      // If not found by email, try searching by admission number pattern
+      if (!user && /^\d{7}$/.test(searchQuery.trim())) {
+        // Convert admission number to email format
+        const admissionNumber = searchQuery.trim();
+        const year = admissionNumber.substring(0, 2);
+        const studentEmail = `${year}${admissionNumber.substring(2)}@students.kcau.ac.ke`;
+        user = await db.getUserByEmail(studentEmail);
+      }
+      
       if (!user) {
         toast({
           title: "User not found",
-          description: "No user found with this email address.",
+          description: "No student found with this email or admission number.",
           variant: "destructive"
         });
         return;
@@ -68,7 +79,7 @@ export const CreateGroupDialog = ({ unitId, currentUserId, onGroupCreated }: Cre
       }
 
       setInvitedMembers(prev => [...prev, user]);
-      setSearchEmail("");
+      setSearchQuery("");
       toast({
         title: "Member invited",
         description: `${user.name} has been invited to the group.`
@@ -222,19 +233,22 @@ export const CreateGroupDialog = ({ unitId, currentUserId, onGroupCreated }: Cre
           </div>
 
           <div>
-            <Label className="text-foreground">Invite Members</Label>
+            <Label className="text-foreground">Invite Members (Email or Admission Number)</Label>
             <div className="flex space-x-2 mt-2">
               <Input
-                placeholder="Enter student email"
-                value={searchEmail}
-                onChange={(e) => setSearchEmail(e.target.value)}
+                placeholder="Enter email or admission number (e.g., 2507564)"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="bg-card/50 border-primary/20 focus:border-primary"
-                onKeyPress={(e) => e.key === 'Enter' && handleInviteMember()}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearchAndInvite()}
               />
               <Button onClick={handleInviteMember} size="sm" variant="outline">
                 <Search className="w-4 h-4" />
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              You can search by email (e.g., 2507564@students.kcau.ac.ke) or admission number (e.g., 2507564)
+            </p>
           </div>
 
           {invitedMembers.length > 0 && (
