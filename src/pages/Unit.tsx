@@ -10,19 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreateGroupDialog } from "@/components/ui/create-group-dialog";
-import { 
-  Users, 
-  Plus, 
-  MessageSquare, 
-  Calendar, 
-  FileText, 
-  ArrowLeft,
-  Clock,
-  User,
-  BookOpen,
-  Target,
-  Assignment as AssignmentIcon
-} from "lucide-react";
+import { Users, Plus, MessageSquare, Calendar, FileText, ArrowLeft, Clock, User, BookOpen, Target, AlignCenter as AssignmentIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Unit = () => {
