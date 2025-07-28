@@ -84,8 +84,14 @@ io.on('connection', (socket) => {
     if (userInfo) {
       const { groupId } = userInfo;
       
+      // Add group context to message
+      const messageWithGroup = {
+        ...message,
+        groupId: groupId
+      };
+      
       // Broadcast message to all users in the group except sender
-      socket.to(groupId).emit('message', message);
+      socket.to(groupId).emit('message', messageWithGroup);
       
       console.log(`Message in group ${groupId}:`, message.type);
     }

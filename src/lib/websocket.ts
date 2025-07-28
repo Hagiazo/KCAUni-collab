@@ -101,6 +101,7 @@ class WebSocketManager {
       payload,
       userId: this.userId!,
       userName: this.userName!,
+      groupId: this.groupId!,
       timestamp: new Date()
     };
 
@@ -166,8 +167,9 @@ class WebSocketManager {
   }
 
   // Chat methods
-  sendChatMessage(message: string) {
+  sendChatMessage(message: string, groupId?: string) {
     this.sendMessage('chat_message', {
+      groupId: groupId || this.groupId,
       message,
       timestamp: new Date()
     });

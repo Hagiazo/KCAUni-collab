@@ -43,7 +43,8 @@ export const RealtimeChat = ({ groupId, userId, userName, initialMessages = [] }
   // WebSocket message handling
   useEffect(() => {
     const handleChatMessage = (message: any) => {
-      if (message.userId !== userId) {
+      // Only process messages for this specific group
+      if (message.userId !== userId && message.groupId === groupId) {
         const chatMessage: ChatMessage = {
           id: `${message.userId}-${Date.now()}`,
           senderId: message.userId,
@@ -58,6 +59,8 @@ export const RealtimeChat = ({ groupId, userId, userName, initialMessages = [] }
     };
 
     const handleUserJoined = (message: any) => {
+      if (message.groupId !== groupId) return;
+      
       setOnlineUsers(prev => {
         if (!prev.includes(message.userId)) {
           return [...prev, message.userId];
@@ -78,6 +81,8 @@ export const RealtimeChat = ({ groupId, userId, userName, initialMessages = [] }
     };
 
     const handleUserLeft = (message: any) => {
+      if (message.groupId !== groupId) return;
+      
       setOnlineUsers(prev => prev.filter(id => id !== message.userId));
       
       // Add system message
@@ -115,7 +120,14 @@ export const RealtimeChat = ({ groupId, userId, userName, initialMessages = [] }
       };
 
       setMessages(prev => [...prev, message]);
-      wsManager.sendChatMessage(newMessage);
+      
+      // Send message with group context
+      wsManager.sendMessage('chat_message', {
+        groupId,
+        message: newMessage,
+        timestamp: new Date()
+      });
+      
       setNewMessage('');
     }
   };
