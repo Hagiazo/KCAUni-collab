@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,14 +35,23 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { wsManager } from "@/lib/websocket";
+import { db, type Group, type Unit, type User } from "@/lib/database";
 
 const GroupWorkspace = () => {
-  const { unitId, groupId } = useParams();
+  const { groupId } = useParams();
+  const navigate = useNavigate();
   const { toast } = useToast();
-  const [userName] = useState(localStorage.getItem("userName") || "John Doe");
+  const [userName] = useState(localStorage.getItem("userName") || "");
+  const [userId] = useState(localStorage.getItem("userId") || "");
+  const [userRole] = useState(localStorage.getItem("userRole") || "student");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const userId = localStorage.getItem("userId") || "1";
+  // Group and unit data
+  const [group, setGroup] = useState<Group | null>(null);
+  const [unit, setUnit] = useState<Unit | null>(null);
+  const [members, setMembers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
   // State for different components
   const [document, setDocument] = useState("");
   const [chatMessage, setChatMessage] = useState("");
@@ -51,127 +60,150 @@ const GroupWorkspace = () => {
   const [documentSaved, setDocumentSaved] = useState(true);
   const [lastSaved, setLastSaved] = useState<Date>(new Date());
 
+  // Load group data
+  useEffect(() => {
+    const loadGroupData = async () => {
+      if (!groupId) {
+        navigate('/dashboard');
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const groupData = await db.getGroupById(groupId);
+        if (!groupData) {
+          toast({
+            title: "Group not found",
+            description: "The requested group could not be found.",
+            variant: "destructive"
+          });
+          navigate('/dashboard');
+          return;
+        }
+
+        setGroup(groupData);
+
+        // Load unit data if group has a unit
+        if (groupData.unitId) {
+          const unitData = await db.getUnitById(groupData.unitId);
+          setUnit(unitData);
+        }
+
+        // Load member details
+        const memberDetails = await Promise.all(
+          groupData.members.map(async (member) => {
+            const user = await db.getUser(member.userId);
+            return user ? { ...user, role: member.role, joinedAt: member.joinedAt } : null;
+          })
+        );
+        setMembers(memberDetails.filter(Boolean) as User[]);
+
+        // Initialize document with group-specific content
+        const groupDocument = `# ${groupData.name} - Collaborative Document
+
+## Group Information
+- **Group Name**: ${groupData.name}
+- **Description**: ${groupData.description}
+- **Unit**: ${unitData?.code ? `${unitData.code} - ${unitData.name}` : 'General Group'}
+- **Created**: ${new Date(groupData.createdAt).toLocaleDateString()}
+- **Members**: ${groupData.members.length}/${groupData.maxMembers}
+
+## Team Members
+${memberDetails.filter(Boolean).map((member: any) => 
+  `- ${member.name} (${member.role === 'leader' ? 'Leader' : 'Member'})`
+).join('\n')}
+
+## Project Progress
+
+### Current Tasks
+- [ ] Task 1
+- [ ] Task 2
+- [ ] Task 3
+
+### Meeting Notes
+
+### Resources and Links
+
+---
+*This document is shared among all group members. Everyone can edit and contribute.*`;
+
+        setDocument(groupDocument);
+
+      } catch (error) {
+        console.error('Error loading group data:', error);
+        toast({
+          title: "Error loading group",
+          description: "Failed to load group data. Please try again.",
+          variant: "destructive"
+        });
+        navigate('/dashboard');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadGroupData();
+  }, [groupId, navigate, toast]);
+
   // Initialize WebSocket connection
   useEffect(() => {
-    if (groupId && userId && userName) {
+    if (groupId && userId && userName && group) {
       wsManager.connect(groupId, userId, userName);
     }
-  }, [groupId, userId, userName]);
+  }, [groupId, userId, userName, group]);
 
-  // Mock data
-  const mockGroup = {
-    id: groupId,
-    name: "Team Alpha",
-    unit: "CS301 - Database Systems",
-    members: [
-      { id: 1, name: "John Doe", email: "john@university.edu", role: "Leader", online: true },
-      { id: 2, name: "Jane Smith", email: "jane@university.edu", role: "Member", online: true },
-      { id: 3, name: "Mike Johnson", email: "mike@university.edu", role: "Member", online: false }
-    ]
+  // Initialize chat messages with group-specific data
+  useEffect(() => {
+    if (group && group.workspace.chatMessages.length > 0) {
+      setChatMessages(group.workspace.chatMessages.map(msg => ({
+        id: msg.id,
+        sender: members.find(m => m.id === msg.senderId)?.name || 'Unknown',
+        message: msg.message,
+        timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        type: msg.type
+      })));
+    } else {
+      // Initialize with welcome message
+      setChatMessages([
+        {
+          id: 1,
+          sender: "System",
+          message: `Welcome to ${group?.name || 'the group'}! Start collaborating with your team members.`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          type: "text"
+        }
+      ]);
+    }
+  }, [group, members]);
+
+  // Initialize tasks with group-specific data
+  useEffect(() => {
+    if (group && group.workspace.tasks.length > 0) {
+      setTasks(group.workspace.tasks.map(task => ({
+        id: parseInt(task.id),
+        title: task.title,
+        description: task.description,
+        assignee: members.find(m => m.id === task.assigneeId)?.name || 'Unassigned',
+        status: task.status === 'todo' ? 'To Do' : task.status === 'in-progress' ? 'In Progress' : 'Done',
+        priority: task.priority.charAt(0).toUpperCase() + task.priority.slice(1),
+        dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      })));
+    }
+  }, [group, members]);
+
+  // Initialize files with group-specific data
+  const [files] = useState(group?.workspace.files || []);
+
+  // Handle Google Meet integration
+  const handleVideoCall = () => {
+    const meetUrl = `https://meet.google.com/new`;
+    window.open(meetUrl, '_blank');
+    
+    toast({
+      title: "Video Call Started",
+      description: "Google Meet has been opened in a new tab. Share the link with your group members.",
+    });
   };
-
-  // Mock shared files
-  const mockFiles = [
-    {
-      id: '1',
-      name: 'Requirements_Document.pdf',
-      type: 'application/pdf',
-      size: 2400000,
-      uploadedBy: 'John Doe',
-      uploadedAt: new Date('2024-02-05T14:30:00'),
-      description: 'Project requirements and specifications',
-      version: 1,
-      isShared: true
-    }
-  ];
-
-  const [chatMessages, setChatMessages] = useState([
-    {
-      id: 1,
-      sender: "Jane Smith",
-      message: "Hey everyone! I've updated the ER diagram section. Please review when you get a chance.",
-      timestamp: "10:30 AM",
-      type: "text"
-    },
-    {
-      id: 2,
-      sender: "Mike Johnson",
-      message: "Great work Jane! I'll add the normalization examples this afternoon.",
-      timestamp: "10:45 AM",
-      type: "text"
-    },
-    {
-      id: 3,
-      sender: "John Doe",
-      message: "I've uploaded the requirements document. Check the Files tab.",
-      timestamp: "11:15 AM",
-      type: "text"
-    },
-    {
-      id: 4,
-      sender: "Jane Smith",
-      message: "Perfect! Should we schedule a call to discuss the SQL section?",
-      timestamp: "11:20 AM",
-      type: "text"
-    }
-  ]);
-
-  const [tasks, setTasks] = useState([
-    {
-      id: 1,
-      title: "Create ER Diagram",
-      description: "Design the entity-relationship diagram for the university database",
-      assignee: "Jane Smith",
-      status: "In Progress",
-      priority: "High",
-      dueDate: "2024-02-10"
-    },
-    {
-      id: 2,
-      title: "Write SQL Queries",
-      description: "Implement the required queries for data retrieval",
-      assignee: "Mike Johnson",
-      status: "To Do",
-      priority: "Medium",
-      dueDate: "2024-02-12"
-    },
-    {
-      id: 3,
-      title: "Database Normalization",
-      description: "Apply normalization rules and document the process",
-      assignee: "John Doe",
-      status: "Done",
-      priority: "Medium",
-      dueDate: "2024-02-08"
-    }
-  ]);
-
-  const [files] = useState([
-    {
-      id: 1,
-      name: "Requirements_Document.pdf",
-      type: "PDF",
-      size: "2.4 MB",
-      uploadedBy: "John Doe",
-      uploadedAt: "2024-02-05 14:30"
-    },
-    {
-      id: 2,
-      name: "ER_Diagram_v2.png",
-      type: "Image",
-      size: "856 KB",
-      uploadedBy: "Jane Smith",
-      uploadedAt: "2024-02-06 09:15"
-    },
-    {
-      id: 3,
-      name: "SQL_Queries.sql",
-      type: "SQL",
-      size: "12 KB",
-      uploadedBy: "Mike Johnson",
-      uploadedAt: "2024-02-06 16:45"
-    }
-  ]);
 
   // Handle document content changes
   const handleDocumentChange = useCallback((content: string) => {
@@ -195,50 +227,6 @@ const GroupWorkspace = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  useEffect(() => {
-    // Initialize with sample document content
-    setDocument(`# Database Systems Project - Team Alpha
-
-## Project Overview
-This project focuses on designing and implementing a comprehensive database system for a university management system.
-
-## Team Members
-- John Doe (Leader)
-- Jane Smith
-- Mike Johnson
-
-## Current Progress
-
-### 1. Requirements Analysis ✅
-- Gathered functional requirements
-- Identified key entities and relationships
-- Documented business rules
-
-### 2. ER Diagram Design 🔄
-- Initial ER diagram completed
-- Currently refining relationships
-- Adding cardinality constraints
-
-### 3. Database Normalization
-- First Normal Form (1NF) ✅
-- Second Normal Form (2NF) ✅ 
-- Third Normal Form (3NF) 🔄
-
-### 4. SQL Implementation
-- DDL statements planned
-- DML queries in progress
-- Test data preparation
-
-## Next Steps
-1. Finalize ER diagram
-2. Implement database schema
-3. Create sample data
-4. Test queries and constraints
-
----
-*Last updated by: Jane Smith at 2024-02-06 11:30*`);
-  }, []);
-
   const handleSendMessage = () => {
     if (chatMessage.trim()) {
       const newMessage = {
@@ -250,6 +238,9 @@ This project focuses on designing and implementing a comprehensive database syst
       };
       setChatMessages([...chatMessages, newMessage]);
       setChatMessage("");
+      
+      // Send to WebSocket for real-time chat
+      wsManager.sendChatMessage(chatMessage);
     }
   };
 
@@ -288,36 +279,62 @@ This project focuses on designing and implementing a comprehensive database syst
     return tasks.filter(task => task.status === status);
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-card flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+          <p className="mt-4 text-muted-foreground">Loading workspace...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!group) {
+    return (
+      <div className="min-h-screen bg-gradient-card flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-foreground mb-4">Group Not Found</h1>
+          <p className="text-muted-foreground mb-4">The requested group could not be found.</p>
+          <Link to="/dashboard">
+            <Button variant="hero">Back to Dashboard</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-card">
       <div className="container mx-auto px-4 py-6">
         {/* Header */}
         <div className="mb-6">
-          <Link to={`/unit/${unitId}`} className="inline-flex items-center text-muted-foreground hover:text-foreground mb-4 transition-colors">
+          <Link to={unit ? `/unit/${unit.id}` : "/dashboard"} className="inline-flex items-center text-muted-foreground hover:text-foreground mb-4 transition-colors">
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Unit
+            {unit ? 'Back to Unit' : 'Back to Dashboard'}
           </Link>
           
           <div className="bg-card/80 backdrop-blur-sm border-primary/10 rounded-lg p-6 shadow-card">
             <div className="flex justify-between items-start">
               <div>
-                <h1 className="text-2xl font-bold text-foreground mb-2">{mockGroup.name}</h1>
-                <p className="text-muted-foreground">{mockGroup.unit}</p>
+                <h1 className="text-2xl font-bold text-foreground mb-2">{group.name}</h1>
+                <p className="text-muted-foreground">
+                  {unit ? `${unit.code} - ${unit.name}` : 'General Group'}
+                </p>
+                {group.description && (
+                  <p className="text-sm text-muted-foreground mt-1">{group.description}</p>
+                )}
               </div>
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
                   <Users className="w-4 h-4 text-primary" />
-                  <span className="text-sm text-foreground">{mockGroup.members.length} members</span>
+                  <span className="text-sm text-foreground">{group.members.length}/{group.maxMembers} members</span>
                 </div>
                 <div className="flex -space-x-2">
-                  <VideoCall 
-                    groupId={groupId!}
-                    participants={mockGroup.members.map(member => ({
-                      id: member.id.toString(),
-                      name: member.name,
-                      isOnline: member.online
-                    }))}
-                  />
+                  <Button variant="outline" size="sm" onClick={handleVideoCall}>
+                    <Video className="w-4 h-4 mr-2" />
+                    Google Meet
+                  </Button>
                   <Button variant="outline" size="sm" className="ml-2">
                     <GitBranch className="w-4 h-4 mr-2" />
                     <a href="https://github.com" target="_blank" rel="noopener noreferrer">
@@ -326,17 +343,20 @@ This project focuses on designing and implementing a comprehensive database syst
                   </Button>
                 </div>
                 <div className="flex -space-x-2">
-                  {mockGroup.members.map((member) => (
+                  {members.slice(0, 4).map((member) => (
                     <div
                       key={member.id}
-                      className={`w-8 h-8 bg-gradient-primary rounded-full flex items-center justify-center text-xs font-medium text-primary-foreground border-2 border-card ${
-                        member.online ? 'ring-2 ring-green-500' : ''
-                      }`}
-                      title={`${member.name} - ${member.online ? 'Online' : 'Offline'}`}
+                      className="w-8 h-8 bg-gradient-primary rounded-full flex items-center justify-center text-xs font-medium text-primary-foreground border-2 border-card"
+                      title={`${member.name} - ${(member as any).role === 'leader' ? 'Leader' : 'Member'}`}
                     >
                       {member.name.split(' ').map(n => n[0]).join('')}
                     </div>
                   ))}
+                  {members.length > 4 && (
+                    <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-xs font-medium border-2 border-card">
+                      +{members.length - 4}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -379,9 +399,9 @@ This project focuses on designing and implementing a comprehensive database syst
               </CardHeader>
               <CardContent>
                 <CollaborativeEditor
-                  documentId={`group-${groupId}-main-doc`}
+                  documentId={`group-${group.id}-main-doc`}
                   initialContent={document}
-                  groupId={groupId!}
+                  groupId={group.id}
                   userId={userId}
                   userName={userName}
                   onContentChange={handleDocumentChange}
@@ -395,7 +415,7 @@ This project focuses on designing and implementing a comprehensive database syst
             <Card className="bg-card/80 backdrop-blur-sm border-primary/10">
               <CardContent className="p-0 h-[600px]">
                 <RealtimeChat
-                  groupId={groupId!}
+                  groupId={group.id}
                   userId={userId}
                   userName={userName}
                   initialMessages={chatMessages.map(msg => ({
@@ -456,7 +476,7 @@ This project focuses on designing and implementing a comprehensive database syst
                             <SelectValue placeholder="Select assignee" />
                           </SelectTrigger>
                           <SelectContent>
-                            {mockGroup.members.map((member) => (
+                            {members.map((member) => (
                               <SelectItem key={member.id} value={member.name}>
                                 {member.name}
                               </SelectItem>
@@ -583,10 +603,10 @@ This project focuses on designing and implementing a comprehensive database syst
           {/* Files */}
           <TabsContent value="files">
             <FileSharing
-              groupId={groupId!}
+              groupId={group.id}
               userId={userId}
               userName={userName}
-              initialFiles={mockFiles}
+              initialFiles={group.workspace.files || []}
             />
           </TabsContent>
 
@@ -601,13 +621,15 @@ This project focuses on designing and implementing a comprehensive database syst
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
-                  <h4 className="font-medium text-foreground mb-2">Assignment: ER Diagram Design</h4>
+                  <h4 className="font-medium text-foreground mb-2">
+                    {unit ? `Assignment for ${unit.code}` : 'Group Assignment'}
+                  </h4>
                   <p className="text-sm text-muted-foreground mb-2">
-                    Create an ER diagram for the university system including entities, relationships, and constraints.
+                    {unit ? `Complete the assignment for ${unit.name}` : 'Submit your group work here'}
                   </p>
                   <div className="flex items-center text-sm text-muted-foreground">
                     <Clock className="w-4 h-4 mr-1" />
-                    Due: February 15, 2024 at 11:59 PM
+                    Due: {new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()} at 11:59 PM
                   </div>
                 </div>
 

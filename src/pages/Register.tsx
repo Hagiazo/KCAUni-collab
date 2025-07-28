@@ -18,7 +18,8 @@ const Register = () => {
     confirmPassword: "",
     role: "student",
     course: "",
-    semester: ""
+    semester: "",
+    year: new Date().getFullYear().toString()
   });
   const [isLoading, setIsLoading] = useState(false);
   const [courses, setCourses] = useState<any[]>([]);
@@ -65,7 +66,8 @@ const Register = () => {
         password: formData.password, // In production, hash this
         role: formData.role as 'student' | 'lecturer',
         course: formData.role === 'student' ? formData.course : undefined,
-        semester: formData.role === 'student' ? formData.semester : undefined
+        semester: formData.role === 'student' ? formData.semester : undefined,
+        year: formData.role === 'student' ? parseInt(formData.year) : undefined
       });
 
       if (result.success && result.user) {
@@ -79,6 +81,9 @@ const Register = () => {
         if (result.user.semester) {
           localStorage.setItem("userSemester", result.user.semester);
         }
+        if (result.user.year) {
+          localStorage.setItem("userYear", result.user.year.toString());
+        }
         
         toast({
           title: "Account Created!",
@@ -89,7 +94,7 @@ const Register = () => {
       } else {
         toast({
           title: "Registration Failed",
-          description: result.error || "Something went wrong. Please try again.",
+          description: "Please select your course, semester, and year.",
           variant: "destructive"
         });
       }
@@ -221,6 +226,22 @@ const Register = () => {
                             {semester.label}
                           </SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="year" className="text-foreground">Academic Year</Label>
+                    <Select value={formData.year} onValueChange={(value) => handleInputChange("year", value)}>
+                      <SelectTrigger className="bg-card/50 border-primary/20 focus:border-primary">
+                        <SelectValue placeholder="Select academic year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="2024">2024</SelectItem>
+                        <SelectItem value="2025">2025</SelectItem>
+                        <SelectItem value="2026">2026</SelectItem>
+                        <SelectItem value="2027">2027</SelectItem>
+                        <SelectItem value="2028">2028</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

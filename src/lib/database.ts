@@ -10,6 +10,7 @@ export interface User {
   course?: string;
   yearOfAdmission?: number; // For students
   semester?: string; // Current semester for students
+  year?: number; // Academic year for students
   avatar?: string;
   isOnline: boolean;
   lastSeen: Date;
@@ -34,6 +35,7 @@ export interface Unit {
   lecturerId: string;
   courseId: string;
   semester: string;
+  year: number;
   credits: number;
   enrolledStudents: string[]; // Student IDs
   pendingEnrollments: EnrollmentRequest[]; // Pending student requests
@@ -451,9 +453,12 @@ class KCAUDatabase {
     const student = await this.getUser(studentId);
     if (!student || student.role !== 'student') return [];
 
+    // Filter units by course, semester, and year
     return this.units.filter(u => 
       u.isActive && 
       u.courseId === student.course && 
+      u.semester === student.semester &&
+      u.year === student.year &&
       !u.enrolledStudents.includes(studentId)
     );
   }
@@ -591,9 +596,21 @@ class KCAUDatabase {
   }
 
   // Group management methods
-  async createGroup(groupData: Omit<Group, 'id' | 'createdAt' | 'lastActivity'>): Promise<Group> {
+  async createGroup(groupData: Omit<Group, 'id' | 'createdAt' | 'lastActivity' | 'courseId'>): Promise<Group> {
+    // Get course ID from unit if unitId is provided
+    let courseId = '';
+    if (groupData.unitId) {
+      const unit = await this.getUnitById(groupData.unitId);
+      courseId = unit?.courseId || '';
+    } else {
+      // For general groups, get course from leader
+      const leader = await this.getUser(groupData.leaderId);
+      courseId = leader?.course || '';
+    }
+
     const newGroup: Group = {
       ...groupData,
+      courseId,
       id: uuidv4(),
       createdAt: new Date(),
       lastActivity: new Date()

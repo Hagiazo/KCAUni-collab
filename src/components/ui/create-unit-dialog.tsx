@@ -23,7 +23,7 @@ export const CreateUnitDialog = ({ lecturerId, onUnitCreated }: CreateUnitDialog
     description: "",
     courseId: "",
     semester: "",
-    credits: "3"
+    year: new Date().getFullYear().toString()
   });
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -59,7 +59,8 @@ export const CreateUnitDialog = ({ lecturerId, onUnitCreated }: CreateUnitDialog
         lecturerId,
         courseId: formData.courseId,
         semester: formData.semester || "JAN-APRIL",
-        credits: parseInt(formData.credits)
+        year: parseInt(formData.year),
+        credits: 3 // Default credits
       });
 
       toast({
@@ -74,7 +75,7 @@ export const CreateUnitDialog = ({ lecturerId, onUnitCreated }: CreateUnitDialog
         description: "",
         courseId: "",
         semester: "",
-        credits: "3"
+        year: new Date().getFullYear().toString()
       });
       setIsOpen(false);
       onUnitCreated();
@@ -159,17 +160,17 @@ export const CreateUnitDialog = ({ lecturerId, onUnitCreated }: CreateUnitDialog
           </div>
 
           <div>
-            <Label htmlFor="credits" className="text-foreground">Credits</Label>
-            <Select value={formData.credits} onValueChange={(value) => handleInputChange("credits", value)}>
+            <Label htmlFor="year" className="text-foreground">Academic Year</Label>
+            <Select value={formData.year} onValueChange={(value) => handleInputChange("year", value)}>
               <SelectTrigger className="bg-card/50 border-primary/20 focus:border-primary">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="1">1 Credit</SelectItem>
-                <SelectItem value="2">2 Credits</SelectItem>
-                <SelectItem value="3">3 Credits</SelectItem>
-                <SelectItem value="4">4 Credits</SelectItem>
-                <SelectItem value="5">5 Credits</SelectItem>
+                <SelectItem value="2024">2024</SelectItem>
+                <SelectItem value="2025">2025</SelectItem>
+                <SelectItem value="2026">2026</SelectItem>
+                <SelectItem value="2027">2027</SelectItem>
+                <SelectItem value="2028">2028</SelectItem>
               </SelectContent>
             </Select>
           </div>
