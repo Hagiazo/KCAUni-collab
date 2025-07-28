@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreateGroupDialog } from "@/components/ui/create-group-dialog";
 import { Users, Plus, MessageSquare, Calendar, FileText, ArrowLeft, Clock, User as UserIcon, BookOpen, Target, AlignCenter as AssignmentIcon, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Upload } from "lucide-react";
 
 const Unit = () => {
   const { unitId } = useParams();

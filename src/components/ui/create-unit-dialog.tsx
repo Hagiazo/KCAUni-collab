@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { db, type Course } from "@/lib/database";
+import { Upload } from "lucide-react";
 
 interface CreateUnitDialogProps {
   lecturerId: string;

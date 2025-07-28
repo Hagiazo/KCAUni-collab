@@ -93,6 +93,13 @@ export const CreateGroupDialog = ({ unitId, currentUserId, onGroupCreated }: Cre
     }
   };
 
+  const handleSearchAndInvite = () => {
+    handleSearch();
+  };
+
+  const handleInviteMember = () => {
+    handleSearch();
+  };
   const handleInviteUser = (user: User) => {
     setInvitedMembers(prev => [...prev, user]);
     setSearchQuery("");
