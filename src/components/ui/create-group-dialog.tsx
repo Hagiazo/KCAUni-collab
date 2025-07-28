@@ -23,12 +23,15 @@ export const CreateGroupDialog = ({ unitId, currentUserId, onGroupCreated }: Cre
   const [maxMembers, setMaxMembers] = useState("4");
   const [invitedMembers, setInvitedMembers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleSearchAndInvite = async () => {
+  const handleSearch = async () => {
     if (!searchQuery.trim()) return;
 
+    setIsSearching(true);
     try {
       // Search by email or admission number (for students)
       let user = await db.getUserByEmail(searchQuery.trim());
@@ -43,11 +46,7 @@ export const CreateGroupDialog = ({ unitId, currentUserId, onGroupCreated }: Cre
       }
       
       if (!user) {
-        toast({
-          title: "User not found",
-          description: "No student found with this email or admission number.",
-          variant: "destructive"
-        });
+        setSearchResults([]);
         return;
       }
 
@@ -57,6 +56,7 @@ export const CreateGroupDialog = ({ unitId, currentUserId, onGroupCreated }: Cre
           description: "Only students can be invited to groups.",
           variant: "destructive"
         });
+        setSearchResults([]);
         return;
       }
 
@@ -66,6 +66,7 @@ export const CreateGroupDialog = ({ unitId, currentUserId, onGroupCreated }: Cre
           description: "You are automatically added as the group leader.",
           variant: "destructive"
         });
+        setSearchResults([]);
         return;
       }
 
@@ -75,22 +76,31 @@ export const CreateGroupDialog = ({ unitId, currentUserId, onGroupCreated }: Cre
           description: "This user is already invited to the group.",
           variant: "destructive"
         });
+        setSearchResults([]);
         return;
       }
 
-      setInvitedMembers(prev => [...prev, user]);
-      setSearchQuery("");
-      toast({
-        title: "Member invited",
-        description: `${user.name} has been invited to the group.`
-      });
+      setSearchResults([user]);
     } catch (error) {
       toast({
         title: "Error",
         description: "Failed to invite member. Please try again.",
         variant: "destructive"
       });
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
     }
+  };
+
+  const handleInviteUser = (user: User) => {
+    setInvitedMembers(prev => [...prev, user]);
+    setSearchQuery("");
+    setSearchResults([]);
+    toast({
+      title: "Member invited",
+      description: `${user.name} has been invited to the group.`
+    });
   };
 
   const removeMember = (userId: string) => {
@@ -163,6 +173,7 @@ export const CreateGroupDialog = ({ unitId, currentUserId, onGroupCreated }: Cre
       setDescription("");
       setMaxMembers("4");
       setInvitedMembers([]);
+      setSearchResults([]);
       setIsOpen(false);
       onGroupCreated();
     } catch (error) {
@@ -249,6 +260,24 @@ export const CreateGroupDialog = ({ unitId, currentUserId, onGroupCreated }: Cre
             <p className="text-xs text-muted-foreground mt-1">
               You can search by email (e.g., 2507564@students.kcau.ac.ke) or admission number (e.g., 2507564)
             </p>
+            
+            {/* Search Results */}
+            {searchResults.length > 0 && (
+              <div className="mt-2 p-2 bg-secondary/10 rounded-lg border border-secondary/20">
+                <p className="text-xs text-muted-foreground mb-2">Search Results:</p>
+                {searchResults.map((user) => (
+                  <div key={user.id} className="flex justify-between items-center p-2 bg-card/50 rounded">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{user.name}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => handleInviteUser(user)}>
+                      Invite
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {invitedMembers.length > 0 && (

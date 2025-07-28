@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { db, type Unit, type Group, type User, type Assignment } from "@/lib/database";
+import { db, type Unit, type Group, type Assignment } from "@/lib/database";
+import type { User } from "@/lib/database";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -369,6 +370,36 @@ const Unit = () => {
                         />
                       </div>
                       
+                      <div>
+                        <Label className="text-foreground">Assignment Files</Label>
+                        <div className="mt-2 border-2 border-dashed border-primary/20 rounded-lg p-6 text-center">
+                          <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                          <p className="text-sm text-muted-foreground mb-2">
+                            Upload assignment files (optional)
+                          </p>
+                          <input
+                            type="file"
+                            multiple
+                            onChange={(e) => {
+                              // Handle file upload here
+                              if (e.target.files) {
+                                toast({
+                                  title: "Files Selected",
+                                  description: `${e.target.files.length} file(s) selected for upload.`
+                                });
+                              }
+                            }}
+                            className="hidden"
+                            id="assignment-files"
+                          />
+                          <label htmlFor="assignment-files">
+                            <Button variant="outline" size="sm" asChild>
+                              <span>Browse Files</span>
+                            </Button>
+                          </label>
+                        </div>
+                      </div>
+                      
                       <Button 
                         onClick={handleCreateAssignment} 
                         className="w-full" 
@@ -404,14 +435,10 @@ const Unit = () => {
                 <Card key={group.id} className="bg-card/80 backdrop-blur-sm border-primary/10 hover:shadow-card transition-all duration-300 hover:scale-[1.01]">
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg text-foreground">{group.name}</CardTitle>
-                        <CardDescription className="text-muted-foreground mt-1">
-                          {group.description}
                         </CardDescription>
                       </div>
-                      <Badge variant="outline" className={`${group.members.length >= group.maxMembers ? 'bg-accent/10 text-accent border-accent/20' : 'bg-primary/10 text-primary border-primary/20'}`}>
-                        {group.members.length}/{group.maxMembers} members
+                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                        {unit.semester}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -520,6 +547,19 @@ const Unit = () => {
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mb-2">{assignment.description}</p>
+                      {assignment.attachments && assignment.attachments.length > 0 && (
+                        <div className="mb-2">
+                          <p className="text-xs font-medium text-foreground mb-1">Files:</p>
+                          <div className="space-y-1">
+                            {assignment.attachments.map((file) => (
+                              <div key={file.id} className="flex items-center text-xs text-muted-foreground">
+                                <FileText className="w-3 h-3 mr-1" />
+                                <span>{file.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       <div className="flex justify-between items-center text-xs">
                         <span className="text-muted-foreground">Due: {new Date(assignment.dueDate).toLocaleDateString()}</span>
                         <span className={`font-medium ${assignment.type === 'Group' ? 'text-primary' : 'text-accent'}`}>

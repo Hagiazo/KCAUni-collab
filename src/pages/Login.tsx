@@ -30,13 +30,22 @@ const Login = () => {
         if (result.user.course) {
           localStorage.setItem("userCourse", result.user.course);
         }
+        if (result.user.semester) {
+          localStorage.setItem("userSemester", result.user.semester);
+        }
+        if (result.user.year) {
+          localStorage.setItem("userYear", result.user.year.toString());
+        }
         
         toast({
           title: "Welcome Back!",
           description: `Successfully logged in as ${result.user.name}`,
         });
         
-        navigate("/dashboard");
+        // Small delay to ensure localStorage is set
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 100);
       } else {
         toast({
           title: "Login Failed",
@@ -45,6 +54,7 @@ const Login = () => {
         });
       }
     } catch (error) {
+      console.error('Login error:', error);
       toast({
         title: "Login Failed",
         description: "Something went wrong. Please try again.",

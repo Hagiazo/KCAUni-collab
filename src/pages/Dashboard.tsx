@@ -335,7 +335,7 @@ const Dashboard = () => {
                         <p className="text-muted-foreground text-center py-4">
                           {searchTerm ? 'No units match your search' : 'No available units found'}
                         </p>
-                      ) : (
+                                      {unit.semester}
                         filteredAvailableUnits.map((unit) => (
                           <div key={unit.id} className="p-3 bg-secondary/10 rounded-lg border border-secondary/20">
                             <div className="flex justify-between items-start">
@@ -345,7 +345,7 @@ const Dashboard = () => {
                                 <div className="flex items-center text-xs text-muted-foreground mt-1">
                                   <Calendar className="w-3 h-3 mr-1" />
                                   {unit.semester} • {unit.credits} credits
-                                </div>
+                                {unit.semester}
                               </div>
                               <Button 
                                 size="sm" 
@@ -529,10 +529,6 @@ const Dashboard = () => {
                           <span className="flex items-center">
                             <Calendar className="w-3 h-3 mr-1" />
                             {unit.semester}
-                          </span>
-                          <span className="flex items-center">
-                            <FileText className="w-3 h-3 mr-1" />
-                            {unit.credits} credits
                           </span>
                         </div>
                         <div className="flex justify-between items-center">

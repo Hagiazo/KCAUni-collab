@@ -214,23 +214,23 @@ ${memberDetails.filter(Boolean).map((member: any) =>
 
   // Handle Google Meet integration
   const handleVideoCall = () => {
-    const meetUrl = `https://meet.google.com/new`;
+    const meetUrl = `https://meet.google.com`;
     window.open(meetUrl, '_blank');
     
     toast({
       title: "Video Call Started",
-      description: "Google Meet has been opened in a new tab. Share the link with your group members.",
+      description: "Google Meet has been opened in a new tab.",
     });
   };
 
   // Handle GitHub integration
   const handleGitHub = () => {
-    const githubUrl = `https://github.com/new`;
+    const githubUrl = `https://github.com`;
     window.open(githubUrl, '_blank');
     
     toast({
       title: "GitHub Repository",
-      description: "GitHub has been opened in a new tab. Create or access your repository.",
+      description: "GitHub has been opened in a new tab.",
     });
   };
 

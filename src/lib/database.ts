@@ -36,7 +36,6 @@ export interface Unit {
   courseId: string;
   semester: string;
   year: number;
-  credits: number;
   enrolledStudents: string[]; // Student IDs
   pendingEnrollments: EnrollmentRequest[]; // Pending student requests
   assignments: Assignment[];
@@ -53,9 +52,19 @@ export interface Assignment {
   dueDate: Date;
   maxMarks: number;
   instructions: string;
-  attachments: string[];
+  attachments: AssignmentFile[];
   status: 'draft' | 'published' | 'closed';
   createdAt: Date;
+}
+
+export interface AssignmentFile {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  content?: string; // For text files
+  url?: string; // For binary files
+  uploadedAt: Date;
 }
 
 export interface Group {
