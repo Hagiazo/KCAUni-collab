@@ -25,7 +25,7 @@ import {
   MoreVertical,
   Download,
   Clock,
-  User,
+  User as UserIcon,
   Paperclip,
   Smile,
   GitBranch,
@@ -117,7 +117,7 @@ const GroupWorkspace = () => {
             return user ? { ...user, role: member.role, joinedAt: member.joinedAt } : null;
           })
         );
-        setMembers(memberDetails.filter(Boolean) as User[]);
+        setMembers(memberDetails.filter(Boolean) as UserIcon[]);
 
         // Initialize document with group-specific content
         const groupDocument = `# ${groupData.name} - Collaborative Document
