@@ -143,21 +143,14 @@ export const CollaborativeEditor = ({
 
     // Send changes to other users
     const newVersion = version + 1;
-      try {
-        await db.saveDocument(`group-${group.id}-main-doc`, content, newVersion);
-      } catch (error) {
-        console.error('Failed to save document:', error);
-      }
     
     if (wsManager.isConnected()) {
-      if (wsManager.isConnected()) {
-        wsManager.sendDocumentChange(
-          `group-${group.id}-main-doc`,
-          content,
-          0, // cursor position
-          newVersion
-        );
-      }
+      wsManager.sendDocumentChange(
+        documentId,
+        newContent,
+        0, // cursor position
+        newVersion
+      );
     }
   }, [documentId, version, onContentChange]);
 
