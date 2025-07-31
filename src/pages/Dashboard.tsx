@@ -33,7 +33,6 @@ import { useToast } from "@/hooks/use-toast";
 import { db, type Unit, type Group, type User as DbUser } from "@/lib/database";
 import { sessionManager } from "@/lib/session-manager";
 
-import { GroupManagement } from "@/components/ui/group-management";
 const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -251,6 +250,77 @@ const Dashboard = () => {
         description: "Failed to process enrollment request",
         variant: "destructive"
       });
+    }
+  };
+
+  const handleBrowseAllUnits = async () => {
+    try {
+      const allUnits = await db.getAllAvailableUnitsForStudent(userId);
+      setAllAvailableUnits(allUnits);
+      setIsBrowseUnitsOpen(true);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load available units",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleCreateGeneralGroup = async () => {
+    if (!generalGroupData.name.trim()) {
+      toast({
+        title: "Group name required",
+        description: "Please enter a name for your group.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const members = [{
+        userId: userId,
+        role: 'leader' as const,
+        joinedAt: new Date(),
+        contributions: 0
+      }];
+
+      await db.createGeneralGroup({
+        name: generalGroupData.name,
+        description: generalGroupData.description || `General study group created by ${userName}`,
+        leaderId: userId,
+        members,
+        maxMembers: parseInt(generalGroupData.maxMembers),
+        workspace: {
+          documents: [],
+          chatMessages: [],
+          tasks: [],
+          files: [],
+          submissions: [],
+          meetingHistory: []
+        },
+        createdBy: 'student',
+        createdById: userId
+      });
+
+      toast({
+        title: "General group created!",
+        description: `"${generalGroupData.name}" has been created successfully.`
+      });
+
+      // Reset form
+      setGeneralGroupData({ name: "", description: "", maxMembers: "4" });
+      setIsCreateGeneralGroupOpen(false);
+      loadDashboardData(userId, userRole); // Refresh data
+    } catch (error) {
+      toast({
+        title: "Error creating group",
+        description: "Failed to create general group. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
