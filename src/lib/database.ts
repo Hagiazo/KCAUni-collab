@@ -36,6 +36,7 @@ export interface Unit {
   courseId: string;
   semester: string;
   year: number;
+  credits: number;
   enrolledStudents: string[]; // Student IDs
   pendingEnrollments: EnrollmentRequest[]; // Pending student requests
   assignments: Assignment[];

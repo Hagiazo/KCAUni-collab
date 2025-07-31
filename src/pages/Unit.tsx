@@ -86,6 +86,17 @@ const Unit = () => {
   const handleJoinGroup = (groupId: string, groupName: string) => {
     const joinGroup = async () => {
       try {
+        // Check if user is already a member
+        const group = groups.find(g => g.id === groupId);
+        if (group && group.members && group.members.find(m => m.userId === userId)) {
+          toast({
+            title: "Already a Member",
+            description: `You are already a member of "${groupName}".`,
+            variant: "destructive"
+          });
+          return;
+        }
+        
         const result = await db.joinGroup(groupId, userId);
         if (result.success) {
           toast({
@@ -501,7 +512,10 @@ const Unit = () => {
                               View Workspace
                             </Button>
                           </Link>
-                          {userRole === 'student' && group.members.length < group.maxMembers && (
+                          {userRole === 'student' && 
+                           group.members && 
+                           group.members.length < group.maxMembers && 
+                           !group.members.find(m => m.userId === userId) && (
                             <Button 
                               size="sm" 
                               variant="hero"

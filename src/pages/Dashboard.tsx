@@ -46,6 +46,7 @@ const Dashboard = () => {
   // Data state
   const [units, setUnits] = useState<Unit[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [availableUnits, setAvailableUnits] = useState<Unit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -79,9 +80,9 @@ const Dashboard = () => {
         const studentGroups = await db.getGroupsByStudent(userId);
         setGroups(studentGroups);
         
-        // Also load available units for enrollment
+        // Load available units for enrollment
         const availableUnits = await db.getAvailableUnitsForStudent(userId);
-        console.log('Available units for student:', availableUnits);
+        setAvailableUnits(availableUnits);
       }
     } catch (error) {
       console.error('Error loading dashboard data:', error);

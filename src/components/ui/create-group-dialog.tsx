@@ -41,11 +41,17 @@ export const CreateGroupDialog = ({ unitId, currentUserId, onGroupCreated }: Cre
         // Convert admission number to email format
         const admissionNumber = searchQuery.trim();
         const year = admissionNumber.substring(0, 2);
-        const studentEmail = `${year}${admissionNumber.substring(2)}@students.kcau.ac.ke`;
+        const studentNumber = admissionNumber.substring(2);
+        const studentEmail = `${admissionNumber}@students.kcau.ac.ke`;
         user = await db.getUserByEmail(studentEmail);
       }
       
       if (!user) {
+        toast({
+          title: "User not found",
+          description: "No student found with that email or admission number.",
+          variant: "destructive"
+        });
         setSearchResults([]);
         return;
       }
@@ -80,6 +86,17 @@ export const CreateGroupDialog = ({ unitId, currentUserId, onGroupCreated }: Cre
         return;
       }
 
+      // Check if user is enrolled in the same unit
+      const unit = await db.getUnitById(unitId);
+      if (unit && unit.enrolledStudents && !unit.enrolledStudents.includes(user.id)) {
+        toast({
+          title: "User not enrolled",
+          description: "This student is not enrolled in this unit.",
+          variant: "destructive"
+        });
+        setSearchResults([]);
+        return;
+      }
       setSearchResults([user]);
     } catch (error) {
       toast({

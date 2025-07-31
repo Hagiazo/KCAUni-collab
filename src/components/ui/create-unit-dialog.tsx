@@ -60,7 +60,8 @@ export const CreateUnitDialog = ({ lecturerId, onUnitCreated }: CreateUnitDialog
         lecturerId,
         courseId: formData.courseId,
         semester: formData.semester || "JAN-APRIL",
-        year: parseInt(formData.year)
+        year: parseInt(formData.year),
+        credits: 3
       });
 
       toast({
