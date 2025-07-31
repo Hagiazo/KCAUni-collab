@@ -28,26 +28,43 @@ const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'
 
 export const CollaborativeEditor = ({
   documentId,
-  initialContent,
+  initialContent = "",
   groupId,
   userId,
   userName,
   onContentChange
 }: CollaborativeEditorProps) => {
-  const [content, setContent] = useState(initialContent);
+  const [content, setContent] = useState(initialContent || "");
   const [version, setVersion] = useState(1);
   const [activeUsers, setActiveUsers] = useState<ActiveUser[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date>(new Date());
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<string>('Connecting...');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
 
   // Initialize WebSocket connection
   useEffect(() => {
-    wsManager.connect(groupId, userId, userName);
-    setIsConnected(true);
+    try {
+      wsManager.connect(groupId, userId, userName);
+      setConnectionStatus('Connecting...');
+    } catch (error) {
+      console.error('Failed to connect to WebSocket:', error);
+      setConnectionStatus('Connection failed');
+    }
 
+    // Listen for connection status changes
+    const handleConnectionStatus = (status: any) => {
+      setIsConnected(status.connected);
+      if (status.connected) {
+        setConnectionStatus('Connected');
+      } else {
+        setConnectionStatus(`Disconnected (${status.attempts} attempts)`);
+      }
+    };
+
+    wsManager.on('connection_status', handleConnectionStatus);
     // Listen for document changes from other users
     const handleDocumentChange = (message: any) => {
       const change: DocumentChange = message.payload;
@@ -55,11 +72,6 @@ export const CollaborativeEditor = ({
         setContent(change.content);
         setVersion(change.version);
         onContentChange?.(change.content);
-        
-        toast({
-          title: "Document Updated",
-          description: `${message.userName} made changes to the document`,
-        });
       }
     };
 
@@ -114,6 +126,7 @@ export const CollaborativeEditor = ({
     wsManager.on('user_left', handleUserLeft);
 
     return () => {
+      wsManager.off('connection_status', handleConnectionStatus);
       wsManager.off('document_change', handleDocumentChange);
       wsManager.off('cursor_position', handleCursorPosition);
       wsManager.off('user_joined', handleUserJoined);
@@ -131,12 +144,14 @@ export const CollaborativeEditor = ({
     const newVersion = version + 1;
     setVersion(newVersion);
     
-    wsManager.sendDocumentChange(
-      documentId,
-      newContent,
-      textareaRef.current?.selectionStart || 0,
-      newVersion
-    );
+    if (wsManager.isConnected()) {
+      wsManager.sendDocumentChange(
+        documentId,
+        newContent,
+        textareaRef.current?.selectionStart || 0,
+        newVersion
+      );
+    }
   }, [documentId, version, onContentChange]);
 
   // Handle cursor position changes
@@ -236,7 +251,7 @@ export const CollaborativeEditor = ({
         <div className="flex items-center space-x-2">
           <div className="text-xs text-muted-foreground">
             {hasUnsavedChanges ? (
-              <span className="text-yellow-600">Unsaved changes</span>
+            {connectionStatus}
             ) : (
               <span>Last saved: {lastSaved.toLocaleTimeString()}</span>
             )}
@@ -289,7 +304,8 @@ export const CollaborativeEditor = ({
           onSelect={handleCursorChange}
           onKeyUp={handleCursorChange}
           className="min-h-[500px] bg-card/50 border-primary/20 focus:border-primary font-mono text-sm resize-none"
-          placeholder="Start writing your collaborative document here..."
+          placeholder={isConnected ? "Start typing to collaborate in real-time..." : "Connecting to collaboration server..."}
+          disabled={!isConnected}
         />
         
         {/* Active user cursors */}

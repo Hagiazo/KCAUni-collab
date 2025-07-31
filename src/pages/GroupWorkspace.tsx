@@ -121,33 +121,9 @@ const GroupWorkspace = () => {
         setMembers(memberDetails.filter(Boolean) as UserIcon[]);
 
         // Initialize document with group-specific content
-        const groupDocument = `# ${groupData.name} - Collaborative Document
-
-## Group Information
-- **Group Name**: ${groupData.name}
-- **Description**: ${groupData.description}
-- **Unit**: ${unitData?.code ? `${unitData.code} - ${unitData.name}` : 'General Group'}
-- **Created**: ${new Date(groupData.createdAt).toLocaleDateString()}
-- **Members**: ${groupData.members.length}/${groupData.maxMembers}
-
-## Team Members
-${memberDetails.filter(Boolean).map((member: any) => 
-  `- ${member.name} (${member.role === 'leader' ? 'Leader' : 'Member'})`
-).join('\n')}
-
-## Project Progress
-
-### Current Tasks
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
-
-### Meeting Notes
-
-### Resources and Links
-
----
-*This document is shared among all group members. Everyone can edit and contribute.*`;
+        // Check if there's existing document content, otherwise start with empty
+        const existingDocument = localStorage.getItem(`group_document_${groupData.id}`);
+        const groupDocument = existingDocument || "";
 
         setDocument(groupDocument);
 

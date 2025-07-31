@@ -53,7 +53,7 @@ const COLORS = [
 
 export const EnhancedCollaborativeEditor: React.FC<EnhancedCollaborativeEditorProps> = ({
   documentId,
-  initialContent,
+  initialContent = "",
   groupId,
   userId,
   userName,
@@ -62,7 +62,7 @@ export const EnhancedCollaborativeEditor: React.FC<EnhancedCollaborativeEditorPr
   permissions = { canEdit: true, canComment: true, canShare: true }
 }) => {
   // Core state
-  const [content, setContent] = useState(initialContent);
+  const [content, setContent] = useState(initialContent || "");
   const [isConnected, setIsConnected] = useState(false);
   const [collaborators, setCollaborators] = useState<CollaboratorState[]>([]);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
@@ -70,6 +70,7 @@ export const EnhancedCollaborativeEditor: React.FC<EnhancedCollaborativeEditorPr
   const [documentVersion, setDocumentVersion] = useState(0);
   const [latency, setLatency] = useState(0);
   const [operationCount, setOperationCount] = useState(0);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   // Refs
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -220,6 +221,7 @@ export const EnhancedCollaborativeEditor: React.FC<EnhancedCollaborativeEditorPr
     if (!wsManagerRef.current) return;
 
     try {
+      setConnectionError(null);
       await wsManagerRef.current.connect(documentId, userId, userName);
       
       // Add self to presence
@@ -237,6 +239,7 @@ export const EnhancedCollaborativeEditor: React.FC<EnhancedCollaborativeEditorPr
       }
     } catch (error) {
       console.error('Failed to connect to WebSocket:', error);
+      setConnectionError(error instanceof Error ? error.message : 'Connection failed');
       toast({
         title: "Connection failed",
         description: "Working in offline mode. Changes will sync when connection is restored.",
@@ -429,7 +432,9 @@ export const EnhancedCollaborativeEditor: React.FC<EnhancedCollaborativeEditorPr
       ) : (
         <>
           <WifiOff className="w-4 h-4 text-red-500" />
-          <span className="text-sm text-red-600">Offline</span>
+          <span className="text-sm text-red-600">
+            {connectionError ? `Error: ${connectionError}` : 'Offline'}
+          </span>
         </>
       )}
     </div>
@@ -579,7 +584,13 @@ export const EnhancedCollaborativeEditor: React.FC<EnhancedCollaborativeEditorPr
               onKeyUp={handleCursorChange}
               onMouseUp={handleCursorChange}
               className="min-h-[600px] bg-transparent border-0 focus:ring-0 font-mono text-sm resize-none"
-              placeholder={readOnly ? "This document is read-only" : "Start typing to collaborate in real-time..."}
+              placeholder={
+                readOnly 
+                  ? "This document is read-only" 
+                  : isConnected 
+                    ? "Start typing to collaborate in real-time..." 
+                    : "Connecting to collaboration server..."
+              }
               disabled={readOnly || !permissions.canEdit}
               style={{ 
                 lineHeight: '1.6',

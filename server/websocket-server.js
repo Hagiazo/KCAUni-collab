@@ -36,9 +36,41 @@ app.get('/health', (req, res) => {
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
-  // Handle joining a group
-  socket.on('join_group', (data) => {
-    const { groupId, userId, userName } = data;
+  // Handle collaborative messages
+  socket.on('collaborative-message', (message) => {
+    const userInfo = userSockets.get(socket.id);
+    
+    // Handle different message types
+    switch (message.type) {
+      case 'user_joined':
+        handleUserJoined(socket, message);
+        break;
+      case 'document_change':
+        handleDocumentChange(socket, message);
+        break;
+      case 'cursor_position':
+        handleCursorPosition(socket, message);
+        break;
+      case 'chat_message':
+        handleChatMessage(socket, message);
+        break;
+      case 'operation':
+        handleOperation(socket, message);
+        break;
+      case 'acknowledgment':
+        handleAcknowledgment(socket, message);
+        break;
+      default:
+        // Broadcast generic messages
+        if (userInfo) {
+          socket.to(userInfo.groupId).emit('collaborative-message', message);
+        }
+    }
+  });
+
+  // Handle user joining a group
+  function handleUserJoined(socket, message) {
+    const { groupId, userId, userName } = message;
     
     // Leave previous groups
     socket.rooms.forEach(room => {
@@ -62,11 +94,12 @@ io.on('connection', (socket) => {
     console.log(`${userName} joined group ${groupId}`);
 
     // Notify other users in the group
-    socket.to(groupId).emit('message', {
+    socket.to(groupId).emit('collaborative-message', {
       type: 'user_joined',
       payload: { groupId },
       userId,
       userName,
+      groupId,
       timestamp: new Date()
     });
 
@@ -76,33 +109,117 @@ io.on('connection', (socket) => {
       .filter(user => user && user.userId !== userId);
     
     socket.emit('group_members', groupMembers);
-  });
+  }
 
-  // Handle messages
-  socket.on('message', (message) => {
+  // Handle document changes
+  function handleDocumentChange(socket, message) {
     const userInfo = userSockets.get(socket.id);
     if (userInfo) {
-      const { groupId } = userInfo;
-      
-      // Add group context to message
-      const messageWithGroup = {
+      // Broadcast to other users in the group
+      socket.to(userInfo.groupId).emit('collaborative-message', {
         ...message,
-        groupId: groupId
-      };
-      
-      // Broadcast message to all users in the group except sender
-      socket.to(groupId).emit('message', messageWithGroup);
-      
-      console.log(`Message in group ${groupId}:`, message.type);
+        timestamp: new Date()
+      });
+      console.log(`Document change in group ${userInfo.groupId} by ${userInfo.userName}`);
     }
-  });
+  }
+
+  // Handle cursor position updates
+  function handleCursorPosition(socket, message) {
+    const userInfo = userSockets.get(socket.id);
+    if (userInfo) {
+      socket.to(userInfo.groupId).emit('collaborative-message', {
+        ...message,
+        timestamp: new Date()
+      });
+    }
+  }
+
+  // Handle chat messages
+  function handleChatMessage(socket, message) {
+    const userInfo = userSockets.get(socket.id);
+    if (userInfo) {
+      socket.to(userInfo.groupId).emit('collaborative-message', {
+        ...message,
+        timestamp: new Date()
+      });
+      console.log(`Chat message in group ${userInfo.groupId}: ${message.payload.message}`);
+    }
+  }
+
+  // Handle operations for operational transformation
+  function handleOperation(socket, message) {
+    const userInfo = userSockets.get(socket.id);
+    if (userInfo) {
+      // In a full implementation, this would include operational transformation
+      socket.to(userInfo.groupId).emit('collaborative-message', {
+        ...message,
+        timestamp: new Date()
+      });
+      
+      // Send acknowledgment back to sender
+      socket.emit('collaborative-message', {
+        type: 'acknowledgment',
+        payload: { operationId: message.payload.id, version: message.payload.version },
+        userId: 'server',
+        userName: 'Server',
+        groupId: userInfo.groupId,
+        timestamp: new Date()
+      });
+    }
+  }
+
+  // Handle acknowledgments
+  function handleAcknowledgment(socket, message) {
+    console.log(`Operation acknowledged: ${message.payload.operationId}`);
+  }
 
   // Handle document changes
   socket.on('document_change', (data) => {
     const userInfo = userSockets.get(socket.id);
     if (userInfo) {
       const { groupId } = userInfo;
-      socket.to(groupId).emit('document_change', {
+      socket.to(groupId).emit('collaborative-message', {
+        type: 'document_change',
+        payload: data,
+        userId: userInfo.userId,
+        userName: userInfo.userName,
+        groupId,
+        timestamp: new Date()
+      });
+    }
+  });
+
+  // Handle cursor position updates (legacy support)
+  socket.on('cursor_position', (data) => {
+    const userInfo = userSockets.get(socket.id);
+    if (userInfo) {
+      const { groupId } = userInfo;
+      socket.to(groupId).emit('collaborative-message', {
+        type: 'cursor_position',
+        payload: data,
+        userId: userInfo.userId,
+        userName: userInfo.userName,
+        groupId,
+        timestamp: new Date()
+      });
+    }
+  });
+
+  // Handle ping for latency measurement
+  socket.on('ping', (timestamp) => {
+    socket.emit('pong', timestamp);
+  });
+
+  // Handle health check
+  socket.on('health_check', () => {
+    socket.emit('health_response', {
+      status: 'ok',
+      timestamp: Date.now(),
+      activeGroups: activeGroups.size,
+      connectedUsers: userSockets.size
+    });
+  });
         ...data,
         userId: userInfo.userId,
         userName: userInfo.userName

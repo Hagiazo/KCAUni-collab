@@ -497,8 +497,8 @@ class KCAUDatabase {
     return this.units.filter(u => 
       u.isActive && 
       u.courseId === student.course && 
-      u.semester === student.semester &&
-      u.year === student.year &&
+      (u.semester === student.semester || !student.semester) &&
+      (u.year === student.year || !student.year) &&
       !u.enrolledStudents.includes(studentId)
     );
   }
@@ -804,6 +804,43 @@ class KCAUDatabase {
     }
 
     return { canCreate: true };
+  }
+
+  // Save document content for persistence
+  async saveDocument(documentId: string, content: string, version: number): Promise<boolean> {
+    try {
+      const documentData = {
+        id: documentId,
+        content,
+        version,
+        lastModified: new Date(),
+        savedBy: 'system'
+      };
+      
+      localStorage.setItem(`document_${documentId}`, JSON.stringify(documentData));
+      return true;
+    } catch (error) {
+      console.error('Failed to save document:', error);
+      return false;
+    }
+  }
+
+  // Load document content
+  async loadDocument(documentId: string): Promise<{ content: string; version: number } | null> {
+    try {
+      const documentData = localStorage.getItem(`document_${documentId}`);
+      if (documentData) {
+        const parsed = JSON.parse(documentData);
+        return {
+          content: parsed.content || "",
+          version: parsed.version || 0
+        };
+      }
+      return { content: "", version: 0 };
+    } catch (error) {
+      console.error('Failed to load document:', error);
+      return { content: "", version: 0 };
+    }
   }
 }
 

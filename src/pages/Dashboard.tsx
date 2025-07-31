@@ -103,6 +103,73 @@ const Dashboard = () => {
     navigate("/");
   };
 
+  const handleViewAllAssignments = () => {
+    // Navigate to assignments page or show assignments modal
+    toast({
+      title: "Assignments",
+      description: "Assignments feature will be implemented soon."
+    });
+  };
+
+  const handleManageStudents = () => {
+    // Navigate to student management page
+    toast({
+      title: "Student Management",
+      description: "Student management feature will be implemented soon."
+    });
+  };
+
+  const handleJoinNewUnit = () => {
+    // Show available units for enrollment
+    const showAvailableUnits = async () => {
+      try {
+        const availableUnits = await db.getAvailableUnitsForStudent(userId);
+        if (availableUnits.length === 0) {
+          toast({
+            title: "No Units Available",
+            description: "No new units are available for enrollment at this time."
+          });
+        } else {
+          toast({
+            title: "Available Units",
+            description: `${availableUnits.length} units available for enrollment.`
+          });
+          // In a full implementation, this would open a modal with available units
+        }
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to load available units.",
+          variant: "destructive"
+        });
+      }
+    };
+    showAvailableUnits();
+  };
+
+  const handleCreateGroup = () => {
+    // Navigate to group creation or show modal
+    toast({
+      title: "Create Group",
+      description: "Group creation feature will be implemented soon."
+    });
+  };
+
+  const handleViewAssignments = () => {
+    // Show student assignments
+    toast({
+      title: "Your Assignments",
+      description: "Assignments view will be implemented soon."
+    });
+  };
+
+  const handleEditProfile = () => {
+    // Open profile editing modal
+    toast({
+      title: "Edit Profile",
+      description: "Profile editing feature will be implemented soon."
+    });
+  };
   const handleUnitCreated = () => {
     // Reload units when a new unit is created
     const loadUnits = async () => {
@@ -353,26 +420,26 @@ const Dashboard = () => {
                 {userRole === 'lecturer' ? (
                   <>
                     <CreateUnitDialog lecturerId={userId} onUnitCreated={handleUnitCreated} />
-                    <Button variant="outline" className="w-full justify-start">
+                    <Button variant="outline" className="w-full justify-start" onClick={handleViewAllAssignments}>
                       <FileText className="w-4 h-4 mr-2" />
                       View All Assignments
                     </Button>
-                    <Button variant="outline" className="w-full justify-start">
+                    <Button variant="outline" className="w-full justify-start" onClick={handleManageStudents}>
                       <Users className="w-4 h-4 mr-2" />
                       Manage Students
                     </Button>
                   </>
                 ) : (
                   <>
-                    <Button variant="accent" className="w-full justify-start">
+                    <Button variant="accent" className="w-full justify-start" onClick={handleJoinNewUnit}>
                       <Plus className="w-4 h-4 mr-2" />
                       Join New Unit
                     </Button>
-                    <Button variant="outline" className="w-full justify-start">
+                    <Button variant="outline" className="w-full justify-start" onClick={handleCreateGroup}>
                       <Users className="w-4 h-4 mr-2" />
                       Create Group
                     </Button>
-                    <Button variant="outline" className="w-full justify-start">
+                    <Button variant="outline" className="w-full justify-start" onClick={handleViewAssignments}>
                       <FileText className="w-4 h-4 mr-2" />
                       View Assignments
                     </Button>
@@ -439,6 +506,7 @@ const Dashboard = () => {
                   )}
                 </div>
                 <Button variant="outline" className="w-full mt-4">
+                <Button variant="outline" className="w-full mt-4" onClick={handleEditProfile}>
                   <Settings className="w-4 h-4 mr-2" />
                   Edit Profile
                 </Button>

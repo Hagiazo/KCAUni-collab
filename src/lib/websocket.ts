@@ -1,10 +1,11 @@
 import { io, Socket } from 'socket.io-client';
 
 export interface WebSocketMessage {
-  type: 'document_change' | 'cursor_position' | 'user_joined' | 'user_left' | 'file_uploaded' | 'chat_message' | 'task_updated';
+  type: 'document_change' | 'cursor_position' | 'user_joined' | 'user_left' | 'file_uploaded' | 'chat_message' | 'task_updated' | 'operation' | 'acknowledgment';
   payload: any;
   userId: string;
   userName: string;
+  groupId: string;
   timestamp: Date;
 }
 
@@ -13,6 +14,12 @@ export interface DocumentChange {
   content: string;
   cursorPosition: number;
   version: number;
+  operation?: {
+    type: 'insert' | 'delete' | 'retain';
+    position: number;
+    content?: string;
+    length?: number;
+  };
 }
 
 export interface FileUpload {
@@ -31,15 +38,21 @@ class WebSocketManager {
   private userId: string | null = null;
   private userName: string | null = null;
   private listeners: Map<string, Function[]> = new Map();
+  private connectionAttempts: number = 0;
+  private maxReconnectAttempts: number = 5;
+  private isReconnecting: boolean = false;
 
   connect(groupId: string, userId: string, userName: string) {
-    // In production, replace with your WebSocket server URL
+    if (this.socket) {
+      this.socket.disconnect();
+    }
+
     this.socket = io('http://localhost:3001', {
       transports: ['websocket'],
       forceNew: true,
       reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
+      reconnectionDelay: Math.min(1000 * Math.pow(2, this.connectionAttempts), 10000),
+      reconnectionAttempts: this.maxReconnectAttempts,
       timeout: 20000
     });
 
@@ -49,26 +62,43 @@ class WebSocketManager {
 
     this.socket.on('connect', () => {
       console.log('Connected to WebSocket server');
+      this.connectionAttempts = 0;
+      this.isReconnecting = false;
       this.joinGroup(groupId);
+      this.emit('connection_status', { connected: true, attempts: this.connectionAttempts });
     });
 
     this.socket.on('disconnect', () => {
       console.log('Disconnected from WebSocket server');
+      this.emit('connection_status', { connected: false, attempts: this.connectionAttempts });
     });
 
-    this.socket.on('message', (message: WebSocketMessage) => {
+    this.socket.on('collaborative-message', (message: WebSocketMessage) => {
       this.handleMessage(message);
     });
 
     this.socket.on('connect_error', (error) => {
-      console.warn('WebSocket connection failed, falling back to local mode:', error);
-      // Fallback to local storage for offline mode
-      this.handleLocalFallback();
+      this.connectionAttempts++;
+      console.warn(`WebSocket connection failed (attempt ${this.connectionAttempts}):`, error);
+      
+      if (this.connectionAttempts >= this.maxReconnectAttempts) {
+        console.log('Max reconnection attempts reached, falling back to local mode');
+        this.handleLocalFallback();
+      }
+      
+      this.emit('connection_status', { 
+        connected: false, 
+        attempts: this.connectionAttempts,
+        error: error.message 
+      });
     });
     
     this.socket.on('reconnect', (attemptNumber) => {
       console.log('Reconnected to WebSocket server after', attemptNumber, 'attempts');
+      this.connectionAttempts = 0;
+      this.isReconnecting = false;
       this.joinGroup(groupId);
+      this.emit('connection_status', { connected: true, attempts: 0 });
     });
   }
 
@@ -87,10 +117,13 @@ class WebSocketManager {
 
   joinGroup(groupId: string) {
     if (this.socket) {
-      this.socket.emit('join_group', {
+      this.socket.emit('collaborative-message', {
+        type: 'user_joined',
         groupId,
         userId: this.userId,
-        userName: this.userName
+        userName: this.userName,
+        timestamp: new Date(),
+        payload: { action: 'join' }
       });
     }
   }
@@ -102,11 +135,12 @@ class WebSocketManager {
       userId: this.userId!,
       userName: this.userName!,
       groupId: this.groupId!,
+      groupId: this.groupId!,
       timestamp: new Date()
     };
 
     if (this.socket?.connected) {
-      this.socket.emit('message', message);
+      this.socket.emit('collaborative-message', message);
     } else {
       // Fallback to local storage for offline mode
       this.handleLocalMessage(message);
@@ -150,10 +184,45 @@ class WebSocketManager {
       documentId,
       content,
       cursorPosition,
-      version
+      version,
+      timestamp: Date.now()
     });
   }
 
+  // Send operation for operational transformation
+  sendOperation(operation: any) {
+    this.sendMessage('operation', operation);
+  }
+
+  // Send acknowledgment
+  sendAcknowledgment(operationId: string, version: number) {
+    this.sendMessage('acknowledgment', { operationId, version });
+  }
+
+  // Get connection status
+  isConnected(): boolean {
+    return this.socket?.connected || false;
+  }
+
+  // Force reconnection
+  forceReconnect() {
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket.connect();
+    }
+  }
+
+  // Add event listener helper
+  emit(event: string, data: any) {
+    const listeners = this.listeners.get(event) || [];
+    listeners.forEach(listener => {
+      try {
+        listener(data);
+      } catch (error) {
+        console.error('Error in WebSocket event listener:', error);
+      }
+    });
+  }
   sendCursorPosition(documentId: string, position: number) {
     this.sendMessage('cursor_position', {
       documentId,
