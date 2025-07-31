@@ -57,15 +57,22 @@ const Dashboard = () => {
 
   // Initialize session and check authentication
   useEffect(() => {
+    console.log('Dashboard useEffect triggered');
     const session = sessionManager.getCurrentSession();
     console.log('Dashboard session check:', session);
     
     if (!session || !sessionManager.isAuthenticated()) {
       console.log('No valid session found, redirecting to login');
+      toast({
+        title: "Session Required",
+        description: "Please sign in to access your dashboard.",
+        variant: "destructive"
+      });
       navigate("/login");
       return;
     }
     
+    console.log('Valid session found, setting user data');
     // Set user data from session
     setUserRole(session.userRole);
     setUserName(session.userName);
@@ -74,6 +81,7 @@ const Dashboard = () => {
     setUserCourse(session.userCourse || "");
     
     // Load dashboard data immediately
+    console.log('Loading dashboard data for user:', session.userId, session.userRole);
     loadDashboardData(session.userId, session.userRole);
     
     // Listen for session changes from other tabs

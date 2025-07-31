@@ -336,15 +336,19 @@ class KCAUDatabase {
 
   // User management methods
   async createUser(userData: Omit<User, 'id' | 'createdAt' | 'isOnline' | 'lastSeen' | 'isVerified'>): Promise<{ success: boolean; user?: User; error?: string }> {
+    console.log('Creating user with data:', userData);
+    
     // Validate email format based on role
     if (userData.role === 'student') {
       const validation = this.validateStudentEmail(userData.email);
       if (!validation.isValid) {
+        console.log('Student email validation failed:', validation.error);
         return { success: false, error: validation.error };
       }
       
       // Check if student email already exists
       if (this.users.find(u => u.email === userData.email)) {
+        console.log('Student email already exists:', userData.email);
         return { success: false, error: 'A user with this email already exists' };
       }
 
@@ -366,11 +370,13 @@ class KCAUDatabase {
     } else if (userData.role === 'lecturer') {
       const validation = this.validateLecturerEmail(userData.email);
       if (!validation.isValid) {
+        console.log('Lecturer email validation failed:', validation.error);
         return { success: false, error: validation.error };
       }
 
       // Check if lecturer email already exists
       if (this.users.find(u => u.email === userData.email)) {
+        console.log('Lecturer email already exists:', userData.email);
         return { success: false, error: 'A user with this email already exists' };
       }
 
@@ -389,6 +395,7 @@ class KCAUDatabase {
       return { success: true, user: newUser };
     }
 
+    console.log('Invalid user role provided:', userData.role);
     return { success: false, error: 'Invalid user role' };
   }
 

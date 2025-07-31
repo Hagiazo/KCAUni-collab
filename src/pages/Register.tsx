@@ -9,6 +9,7 @@ import { BookOpen, Mail, Lock, User, ArrowLeft, GraduationCap, Users } from "luc
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/database";
+import { sessionManager } from "@/lib/session-manager";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -93,12 +94,26 @@ const Register = () => {
           localStorage.setItem("userYearOfAdmission", result.user.yearOfAdmission.toString());
         }
         
+        // Create session using session manager
+        sessionManager.createSession({
+          userId: result.user.id,
+          userName: result.user.name,
+          userRole: result.user.role,
+          userEmail: result.user.email,
+          userCourse: result.user.role === 'student' ? result.user.course : undefined,
+          userSemester: result.user.role === 'student' ? result.user.semester : undefined,
+          userYear: result.user.role === 'student' ? result.user.year?.toString() : undefined
+        });
+        
         toast({
           title: "Account Created!",
           description: "Welcome to KCAU UniCollab. You've been successfully registered.",
         });
         
-        navigate("/dashboard");
+        // Navigate to dashboard with a small delay to ensure session is set
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 100);
       } else {
         toast({
           title: "Registration Failed",
