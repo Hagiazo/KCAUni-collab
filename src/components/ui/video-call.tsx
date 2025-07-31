@@ -79,6 +79,7 @@ export const VideoCall = ({ groupId, participants }: VideoCallProps) => {
     }
 
     setIsCallActive(false);
+    setCallDuration(0);
     // Generate a fresh Google Meet meeting
     setIsDialogOpen(false);
     
@@ -86,9 +87,23 @@ export const VideoCall = ({ groupId, participants }: VideoCallProps) => {
       title: "Google Meet Opened",
       description: "New meeting created. Share the meeting link with your team members.",
     });
-  };
     // Log meeting creation
     console.log('Google Meet opened:', { groupId, timestamp: new Date() });
+  };
+
+  const toggleVideo = () => {
+    setIsVideoEnabled(!isVideoEnabled);
+    if (videoRef.current?.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !isVideoEnabled;
+      }
+    }
+  };
+
+  const toggleAudio = () => {
+    setIsAudioEnabled(!isAudioEnabled);
     if (videoRef.current?.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
       const audioTrack = stream.getAudioTracks()[0];
