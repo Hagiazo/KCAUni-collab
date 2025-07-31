@@ -86,17 +86,6 @@ const Unit = () => {
   const handleJoinGroup = (groupId: string, groupName: string) => {
     const joinGroup = async () => {
       try {
-        // Check if user is already a member
-        const group = groups.find(g => g.id === groupId);
-        if (group && group.members && group.members.find(m => m.userId === userId)) {
-          toast({
-            title: "Already a Member",
-            description: `You are already a member of "${groupName}".`,
-            variant: "destructive"
-          });
-          return;
-        }
-        
         const result = await db.joinGroup(groupId, userId);
         if (result.success) {
           toast({
@@ -491,10 +480,12 @@ const Unit = () => {
                             <div className="flex-1 bg-secondary/20 rounded-full h-2">
                               <div 
                                 className="bg-gradient-primary h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${Math.floor(Math.random() * 100)}%` }}
+                                style={{ width: `${group.currentAssignment ? 75 : 25}%` }}
                               />
                             </div>
-                            <span className="text-xs font-medium text-foreground">{Math.floor(Math.random() * 100)}%</span>
+                            <span className="text-xs font-medium text-foreground">
+                              {group.currentAssignment ? '75%' : '25%'}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -512,10 +503,7 @@ const Unit = () => {
                               View Workspace
                             </Button>
                           </Link>
-                          {userRole === 'student' && 
-                           group.members && 
-                           group.members.length < group.maxMembers && 
-                           !group.members.find(m => m.userId === userId) && (
+                          {userRole === 'student' && group.members.length < group.maxMembers && (
                             <Button 
                               size="sm" 
                               variant="hero"

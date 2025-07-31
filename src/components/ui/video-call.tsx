@@ -57,14 +57,10 @@ export const VideoCall = ({ groupId, participants }: VideoCallProps) => {
       
       toast({
         title: "Call Started",
-        description: "Video call has been initiated. Other members will be notified."
+        description: "Local video preview started. Use Google Meet for group calls."
       });
 
-      // In a real implementation, you would:
-      // 1. Use WebRTC for peer-to-peer connections
-      // 2. Use a signaling server for connection establishment
-      // 3. Handle multiple participants
-      // 4. Implement screen sharing, recording, etc.
+      // Note: This is a local preview. For actual group calls, use the Google Meet button
       
     } catch (error) {
       toast({

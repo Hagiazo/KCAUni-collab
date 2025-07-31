@@ -36,7 +36,6 @@ export interface Unit {
   courseId: string;
   semester: string;
   year: number;
-  credits: number;
   enrolledStudents: string[]; // Student IDs
   pendingEnrollments: EnrollmentRequest[]; // Pending student requests
   assignments: Assignment[];
@@ -689,7 +688,7 @@ class KCAUDatabase {
   async getGroupsByLecturer(lecturerId: string): Promise<Group[]> {
     const lecturerUnits = await this.getUnitsByLecturer(lecturerId);
     const unitIds = lecturerUnits.map(u => u.id);
-    return this.groups.filter(g => unitIds.includes(g.unitId));
+    return this.groups.filter(g => g.unitId && unitIds.includes(g.unitId));
   }
 
   async joinGroup(groupId: string, userId: string): Promise<{ success: boolean; error?: string }> {

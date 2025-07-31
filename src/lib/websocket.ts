@@ -190,12 +190,16 @@ class WebSocketManager {
 
   // Send operation for operational transformation
   sendOperation(operation: any) {
-    this.sendMessage('operation', operation);
+    if (this.socket?.connected) {
+      this.sendMessage('operation', operation);
+    }
   }
 
   // Send acknowledgment
   sendAcknowledgment(operationId: string, version: number) {
-    this.sendMessage('acknowledgment', { operationId, version });
+    if (this.socket?.connected) {
+      this.sendMessage('acknowledgment', { operationId, version });
+    }
   }
 
   // Get connection status

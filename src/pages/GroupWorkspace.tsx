@@ -165,6 +165,8 @@ const GroupWorkspace = () => {
 
   // Create initial document template specific to the group
   const createInitialDocumentTemplate = (groupData: Group, unitData: Unit | null) => {
+    const membersList = groupData.members || [];
+    
     const template = `# ${groupData.name} - Collaborative Workspace
 
 ## Group Information
@@ -172,10 +174,10 @@ const GroupWorkspace = () => {
 - **Description:** ${groupData.description || 'No description provided'}
 - **Unit:** ${unitData ? `${unitData.code} - ${unitData.name}` : 'General Group'}
 - **Created:** ${new Date(groupData.createdAt).toLocaleDateString()}
-- **Members:** ${groupData.members.length}/${groupData.maxMembers}
+- **Members:** ${membersList.length}/${groupData.maxMembers}
 
 ## Team Members
-${groupData.members.map(member => {
+${membersList.map(member => {
   const memberData = members.find(m => m.id === member.userId);
   return `- **${memberData?.name || 'Unknown'}** (${member.role === 'leader' ? '👑 Leader' : 'Member'}) - Joined ${new Date(member.joinedAt).toLocaleDateString()}`;
 }).join('\n')}
@@ -316,13 +318,14 @@ ${groupData.members.map(member => {
   // Handle Google Meet video call
   const handleVideoCall = () => {
     // Generate a unique Google Meet room for this group
+    const meetingId = `${group?.name.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`;
     const meetUrl = `https://meet.google.com/new`;
     
     window.open(meetUrl, '_blank', 'noopener,noreferrer');
     
     toast({
       title: "Google Meet Started",
-      description: `Video call opened for ${group?.name}. Share the meeting link with your team members.`
+      description: `Video call opened for ${group?.name}. Share the link with your team members.`,
     });
 
     // Log meeting in group history (in production, save to database)
@@ -343,12 +346,12 @@ ${groupData.members.map(member => {
 
   // Handle GitHub integration
   const handleGitHub = () => {
-    const githubUrl = `https://github.com/new?name=${encodeURIComponent(group?.name || 'group-project')}&description=${encodeURIComponent(`Repository for ${group?.name} - ${unit?.name || 'Group Project'}`)}`;
+    const githubUrl = `https://github.com/new`;
     window.open(githubUrl, '_blank', 'noopener,noreferrer');
     
     toast({
       title: "GitHub Repository",
-      description: `Create a new repository for ${group?.name}.`
+      description: "Create a new repository for your group project.",
     });
   };
 
