@@ -27,13 +27,13 @@ const Register = () => {
   const { toast } = useToast();
 
   // Load courses on component mount
-  useState(() => {
+  useEffect(() => {
     const loadCourses = async () => {
       const availableCourses = await db.getCourses();
       setCourses(availableCourses);
     };
     loadCourses();
-  });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
