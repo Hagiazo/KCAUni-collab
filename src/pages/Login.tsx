@@ -7,6 +7,7 @@ import { BookOpen, Mail, Lock, ArrowLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/database";
+import { sessionManager } from "@/lib/session-manager";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -23,40 +24,29 @@ const Login = () => {
       const result = await db.authenticateUser(email, password);
       
       if (result.success && result.user) {
-        // Clear any existing data first
-        localStorage.clear();
+        // Clear any existing session first
+        sessionManager.clearSession();
         
-        // Set core user data
-        localStorage.setItem("userRole", result.user.role);
-        localStorage.setItem("userName", result.user.name);
-        localStorage.setItem("userId", result.user.id);
-        localStorage.setItem("userEmail", result.user.email);
-        
-        // Only store course-related data for students
-        if (result.user.role === 'student') {
-          if (result.user.course) {
-            localStorage.setItem("userCourse", result.user.course);
-          }
-          if (result.user.semester) {
-            localStorage.setItem("userSemester", result.user.semester);
-          }
-          if (result.user.year) {
-            localStorage.setItem("userYear", result.user.year.toString());
-          }
-          if (result.user.yearOfAdmission) {
-            localStorage.setItem("userYearOfAdmission", result.user.yearOfAdmission.toString());
-          }
-        }
+        // Create new session with proper data isolation
+        sessionManager.createSession({
+          userId: result.user.id,
+          userName: result.user.name,
+          userRole: result.user.role,
+          userEmail: result.user.email,
+          userCourse: result.user.role === 'student' ? result.user.course : undefined,
+          userSemester: result.user.role === 'student' ? result.user.semester : undefined,
+          userYear: result.user.role === 'student' ? result.user.year?.toString() : undefined
+        });
         
         toast({
           title: "Welcome Back!",
           description: `Successfully logged in as ${result.user.name}`,
         });
         
-        // Navigate with a small delay to ensure localStorage is set
+        // Navigate immediately - session manager handles timing
         setTimeout(() => {
           navigate("/dashboard");
-        }, 100);
+        }, 50);
       } else {
         toast({
           title: "Login Failed",

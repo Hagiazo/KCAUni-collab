@@ -835,6 +835,54 @@ class KCAUDatabase {
     return { success: true };
   }
 
+  // Delete group method
+  async deleteGroup(groupId: string, userId: string): Promise<{ success: boolean; error?: string }> {
+    const groupIndex = this.groups.findIndex(g => g.id === groupId);
+    
+    if (groupIndex === -1) {
+      return { success: false, error: 'Group not found' };
+    }
+
+    const group = this.groups[groupIndex];
+    
+    // Check if user is the group leader or creator
+    const isLeader = group.members.find(m => m.userId === userId && m.role === 'leader');
+    const isCreator = group.createdById === userId;
+    
+    if (!isLeader && !isCreator) {
+      return { success: false, error: 'Only group leaders can delete groups' };
+    }
+
+    // Check if group has active assignments or submissions
+    if (group.currentAssignment) {
+      return { success: false, error: 'Cannot delete group with active assignments' };
+    }
+
+    // Remove the group
+    this.groups.splice(groupIndex, 1);
+    
+    // Notify all group members
+    for (const member of group.members) {
+      if (member.userId !== userId) {
+        await this.createNotification({
+          userId: member.userId,
+          type: 'group',
+          title: 'Group Deleted',
+          message: `The group "${group.name}" has been deleted by the group leader`,
+          read: false,
+          priority: 'medium'
+        });
+      }
+    }
+    
+    // Remove related notifications
+    this.notifications = this.notifications.filter(n => 
+      !(n.type === 'group' && n.message.includes(group.name))
+    );
+    
+    this.saveToStorage();
+    return { success: true };
+  }
   // Search units by code
   async searchUnitsByCode(code: string, studentId: string): Promise<Unit[]> {
     const student = await this.getUser(studentId);
@@ -852,6 +900,38 @@ class KCAUDatabase {
     );
   }
 
+  // Enhanced search - get all available units for student's course
+  async getAllAvailableUnitsForStudent(studentId: string): Promise<Unit[]> {
+    const student = await this.getUser(studentId);
+    if (!student || student.role !== 'student') return [];
+
+    return this.units.filter(u => 
+      u.isActive && 
+      u.courseId === student.course &&
+      (!u.enrolledStudents || !Array.isArray(u.enrolledStudents) || !u.enrolledStudents.includes(studentId)) &&
+      !u.pendingEnrollments.find(req => req.studentId === studentId && req.status === 'pending')
+    );
+  }
+
+  // Allow students to create groups without unit enrollment (general groups)
+  async createGeneralGroup(groupData: Omit<Group, 'id' | 'createdAt' | 'lastActivity' | 'courseId' | 'unitId'>): Promise<Group> {
+    // Get course ID from leader
+    const leader = await this.getUser(groupData.leaderId);
+    const courseId = leader?.course || '';
+
+    const newGroup: Group = {
+      ...groupData,
+      unitId: '', // Empty for general groups
+      courseId,
+      id: uuidv4(),
+      createdAt: new Date(),
+      lastActivity: new Date()
+    };
+    
+    this.groups.push(newGroup);
+    this.saveToStorage();
+    return newGroup;
+  }
   // Get pending enrollment requests for lecturer
   async getPendingEnrollmentRequests(lecturerId: string): Promise<(EnrollmentRequest & { studentName: string; unitName: string })[]> {
     const lecturerUnits = this.units.filter(u => u.lecturerId === lecturerId);

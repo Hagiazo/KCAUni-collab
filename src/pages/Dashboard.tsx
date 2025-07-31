@@ -31,17 +31,18 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { db, type Unit, type Group, type User as DbUser } from "@/lib/database";
+import { sessionManager } from "@/lib/session-manager";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  // User state from localStorage
-  const [userRole] = useState(localStorage.getItem("userRole") || "");
-  const [userName] = useState(localStorage.getItem("userName") || "");
-  const [userId] = useState(localStorage.getItem("userId") || "");
-  const [userEmail] = useState(localStorage.getItem("userEmail") || "");
-  const [userCourse] = useState(localStorage.getItem("userCourse") || "");
+  // User state from session manager
+  const [userRole, setUserRole] = useState("");
+  const [userName, setUserName] = useState("");
+  const [userId, setUserId] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [userCourse, setUserCourse] = useState("");
   
   // Data state
   const [units, setUnits] = useState<Unit[]>([]);
@@ -54,29 +55,59 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Check authentication and load data
+  // Initialize session and check authentication
   useEffect(() => {
-    console.log('Dashboard useEffect - userId:', userId, 'userRole:', userRole);
+    const session = sessionManager.getCurrentSession();
+    console.log('Dashboard session check:', session);
     
-    if (!userId || !userRole) {
-      console.log('No userId or userRole found, redirecting to login');
+    if (!session || !sessionManager.isAuthenticated()) {
+      console.log('No valid session found, redirecting to login');
       navigate("/login");
       return;
     }
     
-    // Add a small delay to ensure localStorage is properly set
-    const timer = setTimeout(() => {
-      loadDashboardData();
-    }, 100);
+    // Set user data from session
+    setUserRole(session.userRole);
+    setUserName(session.userName);
+    setUserId(session.userId);
+    setUserEmail(session.userEmail);
+    setUserCourse(session.userCourse || "");
     
-    return () => clearTimeout(timer);
-  }, [userId, userRole, navigate]);
+    // Load dashboard data immediately
+    loadDashboardData(session.userId, session.userRole);
+    
+    // Listen for session changes from other tabs
+    const handleSessionChange = (data: any) => {
+      console.log('Session changed from another tab:', data);
+      if (data.userId !== session.userId) {
+        navigate("/login");
+      }
+    };
+    
+    const handleRemoteLogout = () => {
+      console.log('Logged out from another tab');
+      navigate("/login");
+    };
+    
+    sessionManager.on('session_changed', handleSessionChange);
+    sessionManager.on('remote_logout', handleRemoteLogout);
+    sessionManager.on('session_cleared', handleRemoteLogout);
+    
+    return () => {
+      sessionManager.off('session_changed', handleSessionChange);
+      sessionManager.off('remote_logout', handleRemoteLogout);
+      sessionManager.off('session_cleared', handleRemoteLogout);
+    };
+  }, [navigate]);
 
-  const loadDashboardData = async () => {
-    console.log('Loading dashboard data for role:', userRole, 'userId:', userId);
+  const loadDashboardData = async (currentUserId?: string, currentUserRole?: string) => {
+    const effectiveUserId = currentUserId || userId;
+    const effectiveUserRole = currentUserRole || userRole;
+    
+    console.log('Loading dashboard data for role:', effectiveUserRole, 'userId:', effectiveUserId);
     
     // Add additional safety checks
-    if (!userId || !userRole) {
+    if (!effectiveUserId || !effectiveUserRole) {
       console.log('Missing userId or userRole, cannot load data');
       setIsLoading(false);
       return;
@@ -84,36 +115,36 @@ const Dashboard = () => {
     
     setIsLoading(true);
     try {
-      if (userRole === 'lecturer') {
+      if (effectiveUserRole === 'lecturer') {
         // Load units created by this lecturer
-        const lecturerUnits = await db.getUnitsByLecturer(userId);
+        const lecturerUnits = await db.getUnitsByLecturer(effectiveUserId);
         console.log('Lecturer units loaded:', lecturerUnits);
         setUnits(lecturerUnits);
         
         // Load groups from lecturer's units
-        const lecturerGroups = await db.getGroupsByLecturer(userId);
+        const lecturerGroups = await db.getGroupsByLecturer(effectiveUserId);
         console.log('Lecturer groups loaded:', lecturerGroups);
         setGroups(lecturerGroups);
-      } else if (userRole === 'student') {
+        
+        // Load pending enrollment requests for lecturer
+        const requests = await db.getPendingEnrollmentRequests(effectiveUserId);
+        console.log('Pending requests loaded:', requests);
+        setPendingRequests(requests);
+      } else if (effectiveUserRole === 'student') {
         // Load units student is enrolled in
-        const studentUnits = await db.getUnitsByStudent(userId);
+        const studentUnits = await db.getUnitsByStudent(effectiveUserId);
         console.log('Student units loaded:', studentUnits);
         setUnits(studentUnits);
         
         // Load groups student is member of
-        const studentGroups = await db.getGroupsByStudent(userId);
+        const studentGroups = await db.getGroupsByStudent(effectiveUserId);
         console.log('Student groups loaded:', studentGroups);
         setGroups(studentGroups);
         
         // Load available units for enrollment
-        const availableUnits = await db.getAvailableUnitsForStudent(userId);
+        const availableUnits = await db.getAvailableUnitsForStudent(effectiveUserId);
         console.log('Available units loaded:', availableUnits);
         setAvailableUnits(availableUnits);
-      } else if (userRole === 'lecturer') {
-        // Load pending enrollment requests for lecturer
-        const requests = await db.getPendingEnrollmentRequests(userId);
-        console.log('Pending requests loaded:', requests);
-        setPendingRequests(requests);
       }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -128,14 +159,8 @@ const Dashboard = () => {
   };
 
   const handleSignOut = () => {
-    // Clear localStorage
-    localStorage.removeItem("userRole");
-    localStorage.removeItem("userName");
-    localStorage.removeItem("userId");
-    localStorage.removeItem("userEmail");
-    localStorage.removeItem("userCourse");
-    localStorage.removeItem("userSemester");
-    localStorage.removeItem("userYear");
+    // Clear session using session manager
+    sessionManager.clearSession();
     
     toast({
       title: "Signed Out",
@@ -146,7 +171,7 @@ const Dashboard = () => {
   };
 
   const handleUnitCreated = () => {
-    loadDashboardData(); // Refresh data when unit is created
+    loadDashboardData(userId, userRole); // Refresh data when unit is created
   };
 
   const handleUnitSearch = async () => {
@@ -211,6 +236,7 @@ const Dashboard = () => {
           description: `${studentName}'s request to join "${unitName}" has been ${approve ? 'approved' : 'rejected'}.`
         });
         loadDashboardData(); // Refresh data
+        loadDashboardData(userId, userRole); // Refresh data
       } else {
         toast({
           title: "Error",
