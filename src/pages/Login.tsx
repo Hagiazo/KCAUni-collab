@@ -42,17 +42,15 @@ const Login = () => {
           if (result.user.yearOfAdmission) {
             localStorage.setItem("userYearOfAdmission", result.user.yearOfAdmission.toString());
           }
-        }
+          if (result.user.yearOfAdmission) {
         
         toast({
           title: "Welcome Back!",
           description: `Successfully logged in as ${result.user.name}`,
         });
         
-        // Small delay to ensure localStorage is set
-        setTimeout(() => {
-          navigate("/dashboard");
-        }, 100);
+        // Navigate immediately after localStorage is set
+        navigate("/dashboard");
       } else {
         toast({
           title: "Login Failed",

@@ -359,6 +359,7 @@ class KCAUDatabase {
       };
 
       this.users.push(newUser);
+      console.log('Created new student user:', newUser);
       this.saveToStorage();
       return { success: true, user: newUser };
       
@@ -383,6 +384,7 @@ class KCAUDatabase {
       };
 
       this.users.push(newUser);
+      console.log('Created new lecturer user:', newUser);
       this.saveToStorage();
       return { success: true, user: newUser };
     }
@@ -391,15 +393,18 @@ class KCAUDatabase {
   }
 
   async authenticateUser(email: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> {
+    console.log('Authenticating user with email:', email);
     const user = this.users.find(u => u.email === email && u.password === password);
     
     if (!user) {
+      console.log('Authentication failed - user not found');
       return { success: false, error: 'Invalid email or password' };
     }
 
     // Update user online status
     user.isOnline = true;
     user.lastSeen = new Date();
+    console.log('Authentication successful for user:', user);
     this.saveToStorage();
 
     return { success: true, user };
@@ -482,7 +487,16 @@ class KCAUDatabase {
   }
 
   async getUnitsByStudent(studentId: string): Promise<Unit[]> {
-    return this.units.filter(u => u.enrolledStudents && u.enrolledStudents.includes(studentId) && u.isActive);
+    console.log('Getting units for student:', studentId);
+    const studentUnits = this.units.filter(u => {
+      const hasEnrolledStudents = u.enrolledStudents && Array.isArray(u.enrolledStudents);
+      const isEnrolled = hasEnrolledStudents && u.enrolledStudents.includes(studentId);
+      const isActive = u.isActive;
+      console.log(`Unit ${u.code}: hasEnrolledStudents=${hasEnrolledStudents}, isEnrolled=${isEnrolled}, isActive=${isActive}`);
+      return isEnrolled && isActive;
+    });
+    console.log('Student units found:', studentUnits);
+    return studentUnits;
   }
 
   async getUnitsByCourse(courseId: string): Promise<Unit[]> {
@@ -491,14 +505,17 @@ class KCAUDatabase {
 
   async getAvailableUnitsForStudent(studentId: string): Promise<Unit[]> {
     const student = await this.getUser(studentId);
+    console.log('Getting available units for student:', student);
     if (!student || student.role !== 'student') return [];
 
     // Filter units by course - make semester and year optional
-    return this.units.filter(u => 
+    const availableUnits = this.units.filter(u => 
       u.isActive && 
       u.courseId === student.course &&
-      (!u.enrolledStudents || !u.enrolledStudents.includes(studentId))
+      (!u.enrolledStudents || !Array.isArray(u.enrolledStudents) || !u.enrolledStudents.includes(studentId))
     );
+    console.log('Available units found:', availableUnits);
+    return availableUnits;
   }
 
   // Student enrollment methods
@@ -680,8 +697,32 @@ class KCAUDatabase {
     );
   }
   async getGroupsByStudent(studentId: string): Promise<Group[]> {
-    return this.groups.filter(g => 
-      g.members.some(member => member.userId === studentId)
+    console.log('Getting groups for student:', studentId);
+    const studentGroups = this.groups.filter(g => {
+      const hasMembers = g.members && Array.isArray(g.members);
+      const isMember = hasMembers && g.members.some(member => member.userId === studentId);
+      console.log(`Group ${g.name}: hasMembers=${hasMembers}, isMember=${isMember}`);
+      return isMember;
+    });
+    console.log('Student groups found:', studentGroups);
+    return studentGroups;
+  }
+
+  async getGroupsByLecturer(lecturerId: string): Promise<Group[]> {
+    console.log('Getting groups for lecturer:', lecturerId);
+    const lecturerUnits = await this.getUnitsByLecturer(lecturerId);
+    const unitIds = lecturerUnits.map(u => u.id);
+    const lecturerGroups = this.groups.filter(g => g.unitId && unitIds.includes(g.unitId));
+    console.log('Lecturer groups found:', lecturerGroups);
+    return lecturerGroups;
+  }
+
+  async getUnitsByLecturer(lecturerId: string): Promise<Unit[]> {
+    console.log('Getting units for lecturer:', lecturerId);
+    const lecturerUnits = this.units.filter(u => u.lecturerId === lecturerId && u.isActive);
+    console.log('Lecturer units found:', lecturerUnits);
+    return lecturerUnits;
+  }
     );
   }
 

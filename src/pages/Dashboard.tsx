@@ -52,7 +52,10 @@ const Dashboard = () => {
 
   // Check authentication and load data
   useEffect(() => {
+    console.log('Dashboard useEffect - userId:', userId, 'userRole:', userRole);
+    
     if (!userId || !userRole) {
+      console.log('No userId or userRole found, redirecting to login');
       navigate("/login");
       return;
     }
@@ -61,27 +64,33 @@ const Dashboard = () => {
   }, [userId, userRole, navigate]);
 
   const loadDashboardData = async () => {
+    console.log('Loading dashboard data for role:', userRole, 'userId:', userId);
     setIsLoading(true);
     try {
       if (userRole === 'lecturer') {
         // Load units created by this lecturer
         const lecturerUnits = await db.getUnitsByLecturer(userId);
+        console.log('Lecturer units loaded:', lecturerUnits);
         setUnits(lecturerUnits);
         
         // Load groups from lecturer's units
         const lecturerGroups = await db.getGroupsByLecturer(userId);
+        console.log('Lecturer groups loaded:', lecturerGroups);
         setGroups(lecturerGroups);
       } else if (userRole === 'student') {
         // Load units student is enrolled in
         const studentUnits = await db.getUnitsByStudent(userId);
+        console.log('Student units loaded:', studentUnits);
         setUnits(studentUnits);
         
         // Load groups student is member of
         const studentGroups = await db.getGroupsByStudent(userId);
+        console.log('Student groups loaded:', studentGroups);
         setGroups(studentGroups);
         
         // Load available units for enrollment
         const availableUnits = await db.getAvailableUnitsForStudent(userId);
+        console.log('Available units loaded:', availableUnits);
         setAvailableUnits(availableUnits);
       }
     } catch (error) {
