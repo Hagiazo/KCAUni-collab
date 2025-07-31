@@ -47,6 +47,10 @@ const Dashboard = () => {
   const [units, setUnits] = useState<Unit[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [availableUnits, setAvailableUnits] = useState<Unit[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [unitSearchQuery, setUnitSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Unit[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -60,11 +64,24 @@ const Dashboard = () => {
       return;
     }
     
-    loadDashboardData();
+    // Add a small delay to ensure localStorage is properly set
+    const timer = setTimeout(() => {
+      loadDashboardData();
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, [userId, userRole, navigate]);
 
   const loadDashboardData = async () => {
     console.log('Loading dashboard data for role:', userRole, 'userId:', userId);
+    
+    // Add additional safety checks
+    if (!userId || !userRole) {
+      console.log('Missing userId or userRole, cannot load data');
+      setIsLoading(false);
+      return;
+    }
+    
     setIsLoading(true);
     try {
       if (userRole === 'lecturer') {
@@ -92,6 +109,11 @@ const Dashboard = () => {
         const availableUnits = await db.getAvailableUnitsForStudent(userId);
         console.log('Available units loaded:', availableUnits);
         setAvailableUnits(availableUnits);
+      } else if (userRole === 'lecturer') {
+        // Load pending enrollment requests for lecturer
+        const requests = await db.getPendingEnrollmentRequests(userId);
+        console.log('Pending requests loaded:', requests);
+        setPendingRequests(requests);
       }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -125,6 +147,84 @@ const Dashboard = () => {
 
   const handleUnitCreated = () => {
     loadDashboardData(); // Refresh data when unit is created
+  };
+
+  const handleUnitSearch = async () => {
+    if (!unitSearchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const results = await db.searchUnitsByCode(unitSearchQuery, userId);
+      setSearchResults(results);
+      
+      if (results.length === 0) {
+        toast({
+          title: "No units found",
+          description: "No units found with that code. Make sure you're searching for units in your course.",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Search failed",
+        description: "Failed to search for units. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleRequestEnrollment = async (unitId: string, unitName: string) => {
+    try {
+      const result = await db.requestEnrollment(unitId, userId, `Request to join ${unitName}`);
+      if (result.success) {
+        toast({
+          title: "Enrollment requested",
+          description: `Your request to join "${unitName}" has been sent to the lecturer.`
+        });
+        setSearchResults(prev => prev.filter(u => u.id !== unitId));
+      } else {
+        toast({
+          title: "Request failed",
+          description: result.error || "Failed to request enrollment",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to request enrollment",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleProcessEnrollmentRequest = async (requestId: string, approve: boolean, studentName: string, unitName: string) => {
+    try {
+      const result = await db.processEnrollmentRequest(requestId, userId, approve);
+      if (result.success) {
+        toast({
+          title: approve ? "Request approved" : "Request rejected",
+          description: `${studentName}'s request to join "${unitName}" has been ${approve ? 'approved' : 'rejected'}.`
+        });
+        loadDashboardData(); // Refresh data
+      } else {
+        toast({
+          title: "Error",
+          description: result.error || "Failed to process request",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to process enrollment request",
+        variant: "destructive"
+      });
+    }
   };
 
   // Filter data based on search
@@ -449,15 +549,52 @@ const Dashboard = () => {
           <div className="mt-8">
             <h3 className="text-xl font-semibold text-foreground mb-4">Quick Actions</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="bg-card/80 backdrop-blur-sm border-primary/10 hover:shadow-card transition-all duration-300 cursor-pointer">
+              <Card className="bg-card/80 backdrop-blur-sm border-primary/10">
                 <CardContent className="p-6">
-                  <div className="flex items-center space-x-4">
+                  <div className="space-y-4">
                     <div className="w-12 h-12 bg-gradient-primary rounded-lg flex items-center justify-center">
                       <Target className="w-6 h-6 text-primary-foreground" />
                     </div>
                     <div>
-                      <h4 className="font-semibold text-foreground">Browse Available Units</h4>
-                      <p className="text-sm text-muted-foreground">Find and request enrollment in new units</p>
+                      <h4 className="font-semibold text-foreground mb-2">Search for Units</h4>
+                      <p className="text-sm text-muted-foreground mb-4">Find units by code and request enrollment</p>
+                      
+                      <div className="flex space-x-2">
+                        <Input
+                          placeholder="Enter unit code (e.g., CS301)"
+                          value={unitSearchQuery}
+                          onChange={(e) => setUnitSearchQuery(e.target.value)}
+                          className="bg-card/50 border-primary/20 focus:border-primary"
+                          onKeyPress={(e) => e.key === 'Enter' && handleUnitSearch()}
+                        />
+                        <Button onClick={handleUnitSearch} disabled={isSearching} size="sm">
+                          {isSearching ? 'Searching...' : 'Search'}
+                        </Button>
+                      </div>
+                      
+                      {searchResults.length > 0 && (
+                        <div className="mt-4 space-y-2">
+                          <p className="text-sm font-medium text-foreground">Search Results:</p>
+                          {searchResults.map((unit) => (
+                            <div key={unit.id} className="p-3 bg-secondary/10 rounded-lg border border-secondary/20">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h5 className="font-medium text-foreground">{unit.code} - {unit.name}</h5>
+                                  <p className="text-xs text-muted-foreground">{unit.description}</p>
+                                  <p className="text-xs text-muted-foreground">{unit.semester} {unit.year}</p>
+                                </div>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => handleRequestEnrollment(unit.id, unit.name)}
+                                >
+                                  Request Enrollment
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -476,6 +613,49 @@ const Dashboard = () => {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+          </div>
+        )}
+
+        {/* Enrollment Requests for Lecturers */}
+        {userRole === 'lecturer' && pendingRequests.length > 0 && (
+          <div className="mt-8">
+            <h3 className="text-xl font-semibold text-foreground mb-4">Pending Enrollment Requests</h3>
+            <div className="space-y-4">
+              {pendingRequests.map((request) => (
+                <Card key={request.id} className="bg-card/80 backdrop-blur-sm border-primary/10">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-medium text-foreground">{request.studentName}</h4>
+                        <p className="text-sm text-muted-foreground">wants to join {request.unitName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Requested on {new Date(request.requestedAt).toLocaleDateString()}
+                        </p>
+                        {request.message && (
+                          <p className="text-xs text-muted-foreground mt-1">"{request.message}"</p>
+                        )}
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleProcessEnrollmentRequest(request.id, false, request.studentName, request.unitName)}
+                        >
+                          Reject
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="default"
+                          onClick={() => handleProcessEnrollmentRequest(request.id, true, request.studentName, request.unitName)}
+                        >
+                          Approve
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </div>
         )}

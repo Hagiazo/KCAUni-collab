@@ -488,12 +488,20 @@ class KCAUDatabase {
 
   async getUnitsByStudent(studentId: string): Promise<Unit[]> {
     console.log('Getting units for student:', studentId);
+    
+    // Add safety check for studentId
+    if (!studentId) {
+      console.log('No studentId provided');
+      return [];
+    }
+    
     const studentUnits = this.units.filter(u => {
+      if (!u || !u.isActive) return false;
+      
       const hasEnrolledStudents = u.enrolledStudents && Array.isArray(u.enrolledStudents);
       const isEnrolled = hasEnrolledStudents && u.enrolledStudents.includes(studentId);
-      const isActive = u.isActive;
-      console.log(`Unit ${u.code}: hasEnrolledStudents=${hasEnrolledStudents}, isEnrolled=${isEnrolled}, isActive=${isActive}`);
-      return isEnrolled && isActive;
+      console.log(`Unit ${u.code}: hasEnrolledStudents=${hasEnrolledStudents}, isEnrolled=${isEnrolled}`);
+      return isEnrolled;
     });
     console.log('Student units found:', studentUnits);
     return studentUnits;
@@ -699,7 +707,16 @@ class KCAUDatabase {
 
   async getGroupsByStudent(studentId: string): Promise<Group[]> {
     console.log('Getting groups for student:', studentId);
+    
+    // Add safety check for studentId
+    if (!studentId) {
+      console.log('No studentId provided');
+      return [];
+    }
+    
     const studentGroups = this.groups.filter(g => {
+      if (!g || !g.members) return false;
+      
       const hasMembers = g.members && Array.isArray(g.members);
       const isMember = hasMembers && g.members.some(member => member.userId === studentId);
       console.log(`Group ${g.name}: hasMembers=${hasMembers}, isMember=${isMember}`);
@@ -783,6 +800,79 @@ class KCAUDatabase {
       return true;
     }
     return false;
+  }
+
+  // Unit deletion method
+  async deleteUnit(unitId: string, lecturerId: string): Promise<{ success: boolean; error?: string }> {
+    const unitIndex = this.units.findIndex(u => u.id === unitId && u.lecturerId === lecturerId);
+    
+    if (unitIndex === -1) {
+      return { success: false, error: 'Unit not found or unauthorized' };
+    }
+
+    const unit = this.units[unitIndex];
+    
+    // Check if unit has enrolled students
+    if (unit.enrolledStudents && unit.enrolledStudents.length > 0) {
+      return { success: false, error: 'Cannot delete unit with enrolled students' };
+    }
+
+    // Check if unit has active groups
+    const unitGroups = this.groups.filter(g => g.unitId === unitId);
+    if (unitGroups.length > 0) {
+      return { success: false, error: 'Cannot delete unit with active groups' };
+    }
+
+    // Remove the unit
+    this.units.splice(unitIndex, 1);
+    
+    // Remove related notifications
+    this.notifications = this.notifications.filter(n => 
+      !(n.type === 'enrollment' && n.message.includes(unit.code))
+    );
+    
+    this.saveToStorage();
+    return { success: true };
+  }
+
+  // Search units by code
+  async searchUnitsByCode(code: string, studentId: string): Promise<Unit[]> {
+    const student = await this.getUser(studentId);
+    if (!student || student.role !== 'student') return [];
+
+    const searchTerm = code.toLowerCase().trim();
+    if (!searchTerm) return [];
+
+    return this.units.filter(u => 
+      u.isActive && 
+      u.code.toLowerCase().includes(searchTerm) &&
+      u.courseId === student.course &&
+      (!u.enrolledStudents || !u.enrolledStudents.includes(studentId)) &&
+      !u.pendingEnrollments.find(req => req.studentId === studentId && req.status === 'pending')
+    );
+  }
+
+  // Get pending enrollment requests for lecturer
+  async getPendingEnrollmentRequests(lecturerId: string): Promise<(EnrollmentRequest & { studentName: string; unitName: string })[]> {
+    const lecturerUnits = this.units.filter(u => u.lecturerId === lecturerId);
+    const allRequests: (EnrollmentRequest & { studentName: string; unitName: string })[] = [];
+
+    for (const unit of lecturerUnits) {
+      const pendingRequests = unit.pendingEnrollments.filter(req => req.status === 'pending');
+      
+      for (const request of pendingRequests) {
+        const student = await this.getUser(request.studentId);
+        if (student) {
+          allRequests.push({
+            ...request,
+            studentName: student.name,
+            unitName: `${unit.code} - ${unit.name}`
+          });
+        }
+      }
+    }
+
+    return allRequests.sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime());
   }
 
   // Get all users (for admin purposes)

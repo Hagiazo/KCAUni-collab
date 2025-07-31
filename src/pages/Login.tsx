@@ -23,6 +23,10 @@ const Login = () => {
       const result = await db.authenticateUser(email, password);
       
       if (result.success && result.user) {
+        // Clear any existing data first
+        localStorage.clear();
+        
+        // Set core user data
         localStorage.setItem("userRole", result.user.role);
         localStorage.setItem("userName", result.user.name);
         localStorage.setItem("userId", result.user.id);
@@ -42,8 +46,6 @@ const Login = () => {
           if (result.user.yearOfAdmission) {
             localStorage.setItem("userYearOfAdmission", result.user.yearOfAdmission.toString());
           }
-          if (result.user.yearOfAdmission) {
-          }
         }
         
         toast({
@@ -51,8 +53,10 @@ const Login = () => {
           description: `Successfully logged in as ${result.user.name}`,
         });
         
-        // Navigate immediately after localStorage is set
-        navigate("/dashboard");
+        // Navigate with a small delay to ensure localStorage is set
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 100);
       } else {
         toast({
           title: "Login Failed",

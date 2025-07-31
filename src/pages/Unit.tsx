@@ -28,6 +28,7 @@ const Unit = () => {
   const [selectedStudent, setSelectedStudent] = useState("");
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
   const [isCreateAssignmentOpen, setIsCreateAssignmentOpen] = useState(false);
+  const [isDeleteUnitOpen, setIsDeleteUnitOpen] = useState(false);
   const [newAssignment, setNewAssignment] = useState({
     title: "",
     description: "",
@@ -178,6 +179,35 @@ const Unit = () => {
         description: "Failed to create assignment",
         variant: "destructive"
       });
+    }
+  };
+
+  const handleDeleteUnit = async () => {
+    if (!unit) return;
+    
+    try {
+      const result = await db.deleteUnit(unit.id, userId);
+      if (result.success) {
+        toast({
+          title: "Unit Deleted",
+          description: "Unit has been successfully deleted."
+        });
+        navigate("/dashboard");
+      } else {
+        toast({
+          title: "Cannot Delete Unit",
+          description: result.error || "Failed to delete unit",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete unit",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleteUnitOpen(false);
     }
   };
 
@@ -408,6 +438,40 @@ const Unit = () => {
                       >
                         Create Assignment
                       </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                
+                <Dialog open={isDeleteUnitOpen} onOpenChange={setIsDeleteUnitOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="destructive" size="sm">
+                      Delete Unit
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-card/95 backdrop-blur-sm border-primary/10">
+                    <DialogHeader>
+                      <DialogTitle className="text-foreground">Delete Unit</DialogTitle>
+                      <DialogDescription className="text-muted-foreground">
+                        Are you sure you want to delete "{unit.code} - {unit.name}"? This action cannot be undone.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="p-4 bg-destructive/10 rounded-lg border border-destructive/20">
+                        <p className="text-sm text-destructive font-medium mb-2">Warning:</p>
+                        <ul className="text-sm text-destructive space-y-1">
+                          <li>• All unit data will be permanently deleted</li>
+                          <li>• Students will lose access to this unit</li>
+                          <li>• All assignments and groups will be removed</li>
+                        </ul>
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <Button variant="outline" onClick={() => setIsDeleteUnitOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={handleDeleteUnit}>
+                          Delete Unit
+                        </Button>
+                      </div>
                     </div>
                   </DialogContent>
                 </Dialog>
