@@ -43,6 +43,8 @@ const Login = () => {
             localStorage.setItem("userYearOfAdmission", result.user.yearOfAdmission.toString());
           }
           if (result.user.yearOfAdmission) {
+          }
+        }
         
         toast({
           title: "Welcome Back!",
