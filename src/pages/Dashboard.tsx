@@ -377,7 +377,7 @@ const Dashboard = () => {
                 <BookOpen className="w-5 h-5 text-accent-foreground" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-header-foreground">KCAU UniCollab</h1>
+                <h1 className="text-xl font-bold text-header-foreground">KCA UniCollab</h1>
                 <p className="text-xs text-header-foreground/80">University Collaboration Platform</p>
               </div>
             </div>
