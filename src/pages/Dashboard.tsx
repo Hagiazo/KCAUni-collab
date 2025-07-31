@@ -62,6 +62,10 @@ const Dashboard = () => {
     description: "",
     maxMembers: "4"
   });
+  
+  // Browse units state
+  const [isBrowseUnitsOpen, setIsBrowseUnitsOpen] = useState(false);
+  const [allAvailableUnits, setAllAvailableUnits] = useState<Unit[]>([]);
 
   // Initialize session and check authentication
   useEffect(() => {
