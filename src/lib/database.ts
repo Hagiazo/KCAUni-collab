@@ -839,11 +839,12 @@ class KCAUDatabase {
         content,
         version,
         lastModified: new Date(),
-        savedBy: 'system',
+        savedBy: 'user',
         groupId: documentId.includes('group-') ? documentId.split('-')[1] : null
       };
       
       localStorage.setItem(`document_${documentId}`, JSON.stringify(documentData));
+      console.log(`Document ${documentId} saved successfully with version ${version}`);
       return true;
     } catch (error) {
       console.error('Failed to save document:', error);
@@ -857,11 +858,13 @@ class KCAUDatabase {
       const documentData = localStorage.getItem(`document_${documentId}`);
       if (documentData) {
         const parsed = JSON.parse(documentData);
+        console.log(`Document ${documentId} loaded with version ${parsed.version || 0}`);
         return {
           content: parsed.content || "",
           version: parsed.version || 0
         };
       }
+      console.log(`No saved document found for ${documentId}, returning empty content`);
       return { content: "", version: 0 };
     } catch (error) {
       console.error('Failed to load document:', error);

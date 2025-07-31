@@ -179,6 +179,11 @@ class WebSocketManager {
 
   // Document collaboration methods
   sendDocumentChange(documentId: string, content: string, cursorPosition: number, version: number) {
+    if (!this.socket?.connected) {
+      console.log('WebSocket not connected, skipping document sync');
+      return;
+    }
+    
     this.sendMessage('document_change', {
       documentId,
       content,
@@ -226,7 +231,12 @@ class WebSocketManager {
       }
     });
   }
+   
   sendCursorPosition(documentId: string, position: number) {
+    if (!this.socket?.connected) {
+      return; // Don't send if not connected
+    }
+    
     this.sendMessage('cursor_position', {
       documentId,
       position
