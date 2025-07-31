@@ -421,29 +421,19 @@ ${memberDetails.filter(Boolean).map((member: any) =>
 
           {/* Document Editor */}
           <TabsContent value="document">
-            <Card className="bg-card/80 backdrop-blur-sm border-primary/10">
-              <CardHeader>
-                <CardTitle className="text-foreground">Collaborative Document</CardTitle>
-                <CardDescription className="text-muted-foreground">
-                  Enterprise-grade real-time collaborative editing with operational transformation
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <EnhancedCollaborativeEditor
-                  documentId={`group-${group.id}-main-doc`}
-                  initialContent={document}
-                  groupId={group.id}
-                  userId={userId}
-                  userName={userName}
-                  onContentChange={handleDocumentChange}
-                  permissions={{
-                    canEdit: true,
-                    canComment: true,
-                    canShare: true
-                  }}
-                />
-              </CardContent>
-            </Card>
+            <EnhancedCollaborativeEditor
+              documentId={`group-${group.id}-main-doc`}
+              initialContent={document}
+              groupId={group.id}
+              userId={userId}
+              userName={userName}
+              onContentChange={handleDocumentChange}
+              permissions={{
+                canEdit: true,
+                canComment: true,
+                canShare: true
+              }}
+            />
           </TabsContent>
 
           {/* Chat */}
