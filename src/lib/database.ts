@@ -482,7 +482,7 @@ class KCAUDatabase {
   }
 
   async getUnitsByStudent(studentId: string): Promise<Unit[]> {
-    return this.units.filter(u => u.enrolledStudents.includes(studentId) && u.isActive);
+    return this.units.filter(u => u.enrolledStudents && u.enrolledStudents.includes(studentId) && u.isActive);
   }
 
   async getUnitsByCourse(courseId: string): Promise<Unit[]> {
@@ -493,13 +493,11 @@ class KCAUDatabase {
     const student = await this.getUser(studentId);
     if (!student || student.role !== 'student') return [];
 
-    // Filter units by course, semester, and year
+    // Filter units by course - make semester and year optional
     return this.units.filter(u => 
       u.isActive && 
-      u.courseId === student.course && 
-      (u.semester === student.semester || !student.semester) &&
-      (u.year === student.year || !student.year) &&
-      !u.enrolledStudents.includes(studentId)
+      u.courseId === student.course &&
+      (!u.enrolledStudents || !u.enrolledStudents.includes(studentId))
     );
   }
 

@@ -78,6 +78,10 @@ const Dashboard = () => {
         // Load groups student is member of
         const studentGroups = await db.getGroupsByStudent(userId);
         setGroups(studentGroups);
+        
+        // Also load available units for enrollment
+        const availableUnits = await db.getAvailableUnitsForStudent(userId);
+        console.log('Available units for student:', availableUnits);
       }
     } catch (error) {
       console.error('Error loading dashboard data:', error);

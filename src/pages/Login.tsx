@@ -27,14 +27,21 @@ const Login = () => {
         localStorage.setItem("userName", result.user.name);
         localStorage.setItem("userId", result.user.id);
         localStorage.setItem("userEmail", result.user.email);
-        if (result.user.course) {
-          localStorage.setItem("userCourse", result.user.course);
-        }
-        if (result.user.semester) {
-          localStorage.setItem("userSemester", result.user.semester);
-        }
-        if (result.user.year) {
-          localStorage.setItem("userYear", result.user.year.toString());
+        
+        // Only store course-related data for students
+        if (result.user.role === 'student') {
+          if (result.user.course) {
+            localStorage.setItem("userCourse", result.user.course);
+          }
+          if (result.user.semester) {
+            localStorage.setItem("userSemester", result.user.semester);
+          }
+          if (result.user.year) {
+            localStorage.setItem("userYear", result.user.year.toString());
+          }
+          if (result.user.yearOfAdmission) {
+            localStorage.setItem("userYearOfAdmission", result.user.yearOfAdmission.toString());
+          }
         }
         
         toast({

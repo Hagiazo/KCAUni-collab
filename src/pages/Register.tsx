@@ -89,6 +89,9 @@ const Register = () => {
             localStorage.setItem("userYear", result.user.year.toString());
           }
         }
+        if (result.user.yearOfAdmission) {
+          localStorage.setItem("userYearOfAdmission", result.user.yearOfAdmission.toString());
+        }
         
         toast({
           title: "Account Created!",
