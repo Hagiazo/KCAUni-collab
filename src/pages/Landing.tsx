@@ -14,7 +14,7 @@ const Landing = () => {
               <div className="w-8 h-8 bg-gradient-accent rounded-lg flex items-center justify-center">
                 <BookOpen className="w-5 h-5 text-accent-foreground" />
               </div>
-              <span className="text-xl font-bold text-header-foreground">UniCollab</span>
+              <span className="text-xl font-bold text-header-foreground">KCA UniCollab</span>
             </div>
             <div className="flex space-x-4">
               <Button variant="ghost" className="text-header-foreground hover:bg-white/10">
