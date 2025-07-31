@@ -236,9 +236,9 @@ class WebSocketManager {
   }
 
   // Chat methods
-  sendChatMessage(message: string, groupId?: string) {
+  sendChatMessage(message: string, targetGroupId?: string) {
     this.sendMessage('chat_message', {
-      groupId: groupId || this.groupId,
+      groupId: targetGroupId || this.groupId,
       message,
       timestamp: new Date()
     });

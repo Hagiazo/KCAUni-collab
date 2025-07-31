@@ -239,7 +239,7 @@ const Register = () => {
                     <Label htmlFor="year" className="text-foreground">Academic Year</Label>
                     <Select value={formData.year} onValueChange={(value) => handleInputChange("year", value)}>
                       <SelectTrigger className="bg-card/50 border-primary/20 focus:border-primary">
-                        <SelectValue placeholder="Select academic year" />
+                        <SelectValue placeholder="Select your academic year" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="2024">2024</SelectItem>
@@ -249,6 +249,9 @@ const Register = () => {
                         <SelectItem value="2028">2028</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Select the year you are currently studying in
+                    </p>
                   </div>
                 </>
               )}

@@ -12,8 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CollaborativeEditor } from "@/components/ui/collaborative-editor";
 import { FileSharing } from "@/components/ui/file-sharing";
 import { RealtimeChat } from "@/components/ui/realtime-chat";
-import { EnhancedCollaborativeEditor } from "@/components/ui/enhanced-collaborative-editor";
+import { VideoCall } from "@/components/ui/video-call";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { 
   ArrowLeft, 
   Users, 
@@ -32,28 +33,26 @@ import {
   GitBranch,
   Save,
   History,
-  Video
+  Video,
+  Crown,
+  Calendar,
+  BookOpen
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { wsManager } from "@/lib/websocket";
 import { db, type Group, type Unit, type User } from "@/lib/database";
 
-interface ChatMessage {
-  id: number;
-  sender: string;
-  message: string;
-  timestamp: string;
-  type: string;
-}
-
 interface Task {
-  id: number;
+  id: string;
   title: string;
   description: string;
-  assignee: string;
-  status: string;
-  priority: string;
-  dueDate: string;
+  assigneeId?: string;
+  assigneeName?: string;
+  status: 'todo' | 'in-progress' | 'review' | 'done';
+  priority: 'low' | 'medium' | 'high';
+  dueDate?: Date;
+  createdBy: string;
+  createdAt: Date;
 }
 
 const GroupWorkspace = () => {
@@ -63,25 +62,30 @@ const GroupWorkspace = () => {
   const [userName] = useState(localStorage.getItem("userName") || "");
   const [userId] = useState(localStorage.getItem("userId") || "");
   const [userRole] = useState(localStorage.getItem("userRole") || "student");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Group and unit data
   const [group, setGroup] = useState<Group | null>(null);
   const [unit, setUnit] = useState<Unit | null>(null);
-  const [members, setMembers] = useState<User[]>([]);
+  const [members, setMembers] = useState<(User & { role: string; joinedAt: Date })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   
-  // State for different components
-  const [document, setDocument] = useState("");
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatMessage, setChatMessage] = useState("");
+  // Document state
+  const [documentContent, setDocumentContent] = useState("");
+  const [documentVersion, setDocumentVersion] = useState(0);
+  
+  // Task management
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [newTask, setNewTask] = useState({ title: "", description: "", assignee: "" });
+  const [newTask, setNewTask] = useState({ 
+    title: "", 
+    description: "", 
+    assigneeId: "",
+    priority: "medium" as "low" | "medium" | "high",
+    dueDate: ""
+  });
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
-  const [documentSaved, setDocumentSaved] = useState(true);
-  const [lastSaved, setLastSaved] = useState<Date>(new Date());
 
-  // Load group data
+  // Load group data and initialize workspace
   useEffect(() => {
     const loadGroupData = async () => {
       if (!groupId) {
@@ -91,6 +95,7 @@ const GroupWorkspace = () => {
 
       setIsLoading(true);
       try {
+        // Load group data
         const groupData = await db.getGroupById(groupId);
         if (!groupData) {
           toast({
@@ -111,21 +116,36 @@ const GroupWorkspace = () => {
           setUnit(unitData);
         }
 
-        // Load member details
+        // Load member details with their roles
         const memberDetails = await Promise.all(
           groupData.members.map(async (member) => {
             const user = await db.getUser(member.userId);
-            return user ? { ...user, role: member.role, joinedAt: member.joinedAt } : null;
+            return user ? { 
+              ...user, 
+              role: member.role, 
+              joinedAt: member.joinedAt,
+              contributions: member.contributions 
+            } : null;
           })
         );
-        setMembers(memberDetails.filter(Boolean) as UserIcon[]);
+        setMembers(memberDetails.filter(Boolean) as (User & { role: string; joinedAt: Date })[]);
 
-        // Initialize document with group-specific content
-        // Check if there's existing document content, otherwise start with empty
-        const existingDocument = localStorage.getItem(`group_document_${groupData.id}`);
-        const groupDocument = existingDocument || "";
+        // Load existing document content for this specific group
+        const savedDocument = await db.loadDocument(`group-${groupData.id}-main-doc`);
+        if (savedDocument) {
+          setDocumentContent(savedDocument.content);
+          setDocumentVersion(savedDocument.version);
+        } else {
+          // Create initial document template for new groups
+          const initialContent = createInitialDocumentTemplate(groupData, unitData);
+          setDocumentContent(initialContent);
+          setDocumentVersion(1);
+          // Save the initial template
+          await db.saveDocument(`group-${groupData.id}-main-doc`, initialContent, 1);
+        }
 
-        setDocument(groupDocument);
+        // Load tasks for this group
+        loadGroupTasks(groupData.id);
 
       } catch (error) {
         console.error('Error loading group data:', error);
@@ -143,147 +163,266 @@ const GroupWorkspace = () => {
     loadGroupData();
   }, [groupId, navigate, toast]);
 
-  // Initialize WebSocket connection
+  // Create initial document template specific to the group
+  const createInitialDocumentTemplate = (groupData: Group, unitData: Unit | null) => {
+    const template = `# ${groupData.name} - Collaborative Workspace
+
+## Group Information
+- **Group Name:** ${groupData.name}
+- **Description:** ${groupData.description || 'No description provided'}
+- **Unit:** ${unitData ? `${unitData.code} - ${unitData.name}` : 'General Group'}
+- **Created:** ${new Date(groupData.createdAt).toLocaleDateString()}
+- **Members:** ${groupData.members.length}/${groupData.maxMembers}
+
+## Team Members
+${groupData.members.map(member => {
+  const memberData = members.find(m => m.id === member.userId);
+  return `- **${memberData?.name || 'Unknown'}** (${member.role === 'leader' ? '👑 Leader' : 'Member'}) - Joined ${new Date(member.joinedAt).toLocaleDateString()}`;
+}).join('\n')}
+
+## Project Overview
+*Use this section to outline your project goals, requirements, and deliverables.*
+
+---
+
+## Meeting Notes
+*Record your team meetings and decisions here.*
+
+### Meeting 1 - ${new Date().toLocaleDateString()}
+- **Attendees:** 
+- **Agenda:** 
+- **Decisions:** 
+- **Action Items:** 
+
+---
+
+## Resources and Links
+- **GitHub Repository:** [Add your repo link here]
+- **Google Drive:** [Add shared drive link here]
+- **Reference Materials:** [Add any reference links here]
+
+---
+
+## Progress Tracking
+*Track your project milestones and progress here.*
+
+- [ ] Project planning completed
+- [ ] Requirements gathering
+- [ ] Design phase
+- [ ] Implementation started
+- [ ] Testing phase
+- [ ] Final submission
+
+---
+
+*This document is collaboratively edited by all group members. Start typing below to add your content!*
+
+`;
+    return template;
+  };
+
+  // Load tasks for the group
+  const loadGroupTasks = async (groupId: string) => {
+    try {
+      // Load tasks from localStorage for now (in production, load from database)
+      const savedTasks = localStorage.getItem(`group_tasks_${groupId}`);
+      if (savedTasks) {
+        const parsedTasks = JSON.parse(savedTasks);
+        setTasks(parsedTasks.map((task: any) => ({
+          ...task,
+          createdAt: new Date(task.createdAt),
+          dueDate: task.dueDate ? new Date(task.dueDate) : undefined
+        })));
+      }
+    } catch (error) {
+      console.error('Error loading tasks:', error);
+    }
+  };
+
+  // Save tasks to storage
+  const saveGroupTasks = useCallback((updatedTasks: Task[]) => {
+    if (group) {
+      localStorage.setItem(`group_tasks_${group.id}`, JSON.stringify(updatedTasks));
+    }
+  }, [group]);
+
+  // Initialize WebSocket connection for this specific group
   useEffect(() => {
     if (groupId && userId && userName && group) {
-      wsManager.connect(groupId, userId, userName);
-    }
-  }, [groupId, userId, userName, group]);
+      try {
+        setConnectionStatus('connecting');
+        wsManager.connect(groupId, userId, userName);
+        
+        // Listen for connection status
+        wsManager.on('connection_status', (status: any) => {
+          setConnectionStatus(status.connected ? 'connected' : 'disconnected');
+        });
 
-  // Initialize chat messages with group-specific data
-  useEffect(() => {
-    if (group && group.workspace.chatMessages.length > 0) {
-      setChatMessages(group.workspace.chatMessages.map(msg => ({
-        id: msg.id,
-        sender: members.find(m => m.id === msg.senderId)?.name || 'Unknown',
-        message: msg.message,
-        timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        type: msg.type
-      })));
-    } else {
-      // Initialize with welcome message
-      setChatMessages([
-        {
-          id: 1,
-          sender: "System",
-          message: `Welcome to ${group?.name || 'the group'}! Start collaborating with your team members.`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          type: "text"
-        }
-      ]);
-    }
-  }, [group, members]);
+        // Listen for document changes from other group members
+        wsManager.on('document_change', (message: any) => {
+          if (message.payload.documentId === `group-${groupId}-main-doc` && message.userId !== userId) {
+            setDocumentContent(message.payload.content);
+            setDocumentVersion(message.payload.version);
+          }
+        });
 
-  // Initialize tasks with group-specific data
-  useEffect(() => {
-    if (group && group.workspace.tasks.length > 0) {
-      setTasks(group.workspace.tasks.map(task => ({
-        id: parseInt(task.id),
-        title: task.title,
-        description: task.description,
-        assignee: members.find(m => m.id === task.assigneeId)?.name || 'Unassigned',
-        status: task.status === 'todo' ? 'To Do' : task.status === 'in-progress' ? 'In Progress' : 'Done',
-        priority: task.priority.charAt(0).toUpperCase() + task.priority.slice(1),
-        dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      })));
-    }
-  }, [group, members]);
+        // Listen for task updates
+        wsManager.on('task_updated', (message: any) => {
+          if (message.groupId === groupId && message.userId !== userId) {
+            loadGroupTasks(groupId);
+          }
+        });
 
-  // Handle Google Meet integration
+      } catch (error) {
+        console.error('WebSocket connection error:', error);
+        setConnectionStatus('disconnected');
+        toast({
+          title: "Connection Error",
+          description: "Failed to connect to real-time collaboration. Working in offline mode.",
+          variant: "destructive"
+        });
+      }
+    }
+
+    return () => {
+      // Cleanup WebSocket listeners
+      wsManager.off('connection_status', () => {});
+      wsManager.off('document_change', () => {});
+      wsManager.off('task_updated', () => {});
+    };
+  }, [groupId, userId, userName, group, toast]);
+
+  // Handle document content changes
+  const handleDocumentChange = useCallback(async (content: string) => {
+    setDocumentContent(content);
+    const newVersion = documentVersion + 1;
+    setDocumentVersion(newVersion);
+
+    // Save to database
+    if (group) {
+      await db.saveDocument(`group-${group.id}-main-doc`, content, newVersion);
+      
+      // Send to other group members via WebSocket
+      wsManager.sendDocumentChange(
+        `group-${group.id}-main-doc`,
+        content,
+        0, // cursor position
+        newVersion
+      );
+    }
+  }, [group, documentVersion]);
+
+  // Handle Google Meet video call
   const handleVideoCall = () => {
-    const meetUrl = `https://meet.google.com`;
-    window.open(meetUrl, '_blank');
+    // Generate a unique Google Meet room for this group
+    const meetingId = `${group?.name.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`;
+    const meetUrl = `https://meet.google.com/new`;
+    
+    window.open(meetUrl, '_blank', 'noopener,noreferrer');
     
     toast({
-      title: "Video Call Started",
-      description: "Google Meet has been opened in a new tab.",
+      title: "Google Meet Started",
+      description: `Video call opened for ${group?.name}. Share the link with your team members.`,
     });
+
+    // Log meeting in group history (in production, save to database)
+    if (group) {
+      const meetingRecord = {
+        id: `meeting-${Date.now()}`,
+        title: `${group.name} Video Call`,
+        scheduledAt: new Date(),
+        duration: 0,
+        participants: [userId],
+        status: 'ongoing' as const
+      };
+      
+      // In production, save to database
+      console.log('Meeting started:', meetingRecord);
+    }
   };
 
   // Handle GitHub integration
   const handleGitHub = () => {
-    const githubUrl = `https://github.com`;
-    window.open(githubUrl, '_blank');
+    const githubUrl = `https://github.com/new`;
+    window.open(githubUrl, '_blank', 'noopener,noreferrer');
     
     toast({
       title: "GitHub Repository",
-      description: "GitHub has been opened in a new tab.",
+      description: "Create a new repository for your group project.",
     });
   };
 
-  // Handle document content changes
-  const handleDocumentChange = useCallback((content: string) => {
-    setDocument(content);
-    setDocumentSaved(false);
-  }, []);
+  // Task management functions
+  const handleCreateTask = async () => {
+    if (!newTask.title.trim() || !group) return;
 
-  // Auto-save document
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!documentSaved) {
-        setDocumentSaved(true);
-        setLastSaved(new Date());
-        // In real implementation, save to backend
-      }
-    }, 2000);
+    const task: Task = {
+      id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      title: newTask.title,
+      description: newTask.description,
+      assigneeId: newTask.assigneeId || undefined,
+      assigneeName: newTask.assigneeId ? members.find(m => m.id === newTask.assigneeId)?.name : undefined,
+      status: 'todo',
+      priority: newTask.priority,
+      dueDate: newTask.dueDate ? new Date(newTask.dueDate) : undefined,
+      createdBy: userId,
+      createdAt: new Date()
+    };
 
-    return () => clearTimeout(timer);
-  }, [document, documentSaved]);
+    const updatedTasks = [...tasks, task];
+    setTasks(updatedTasks);
+    saveGroupTasks(updatedTasks);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages]);
+    // Send task update to other group members
+    wsManager.sendTaskUpdate(task.id, { action: 'created', task });
 
-  const handleSendMessage = () => {
-    if (chatMessage.trim()) {
-      const newMessage = {
-        id: chatMessages.length + 1,
-        sender: userName,
-        message: chatMessage,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        type: "text"
-      };
-      setChatMessages([...chatMessages, newMessage]);
-      setChatMessage("");
-      
-      // Send to WebSocket for real-time chat
-      wsManager.sendChatMessage(chatMessage);
-    }
+    setNewTask({ title: "", description: "", assigneeId: "", priority: "medium", dueDate: "" });
+    setIsNewTaskOpen(false);
+    
+    toast({
+      title: "Task Created",
+      description: `"${task.title}" has been added to the task board.`
+    });
   };
 
-  const handleCreateTask = () => {
-    if (newTask.title) {
-      const task = {
-        id: tasks.length + 1,
-        title: newTask.title,
-        description: newTask.description,
-        assignee: newTask.assignee || "Unassigned",
-        status: "To Do",
-        priority: "Medium",
-        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      };
-      setTasks([...tasks, task]);
-      setNewTask({ title: "", description: "", assignee: "" });
-      setIsNewTaskOpen(false);
-      toast({
-        title: "Task Created",
-        description: "New task has been added to the board."
-      });
-    }
-  };
-
-  const moveTask = (taskId: number, newStatus: string) => {
-    setTasks(tasks.map(task => 
+  const moveTask = async (taskId: string, newStatus: Task['status']) => {
+    const updatedTasks = tasks.map(task => 
       task.id === taskId ? { ...task, status: newStatus } : task
-    ));
+    );
+    setTasks(updatedTasks);
+    saveGroupTasks(updatedTasks);
+
+    // Send task update to other group members
+    wsManager.sendTaskUpdate(taskId, { action: 'moved', status: newStatus });
+
+    const task = tasks.find(t => t.id === taskId);
     toast({
       title: "Task Updated",
-      description: `Task moved to ${newStatus}.`
+      description: `"${task?.title}" moved to ${newStatus.replace('-', ' ')}.`
     });
   };
 
-  const getTasksByStatus = (status: string) => {
+  const getTasksByStatus = (status: Task['status']) => {
     return tasks.filter(task => task.status === status);
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high': return 'bg-red-500/10 text-red-600 border-red-500/20';
+      case 'medium': return 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20';
+      case 'low': return 'bg-green-500/10 text-green-600 border-green-500/20';
+      default: return 'bg-gray-500/10 text-gray-600 border-gray-500/20';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'todo': return 'bg-gray-500/10 text-gray-600 border-gray-500/20';
+      case 'in-progress': return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
+      case 'review': return 'bg-purple-500/10 text-purple-600 border-purple-500/20';
+      case 'done': return 'bg-green-500/10 text-green-600 border-green-500/20';
+      default: return 'bg-gray-500/10 text-gray-600 border-gray-500/20';
+    }
   };
 
   if (isLoading) {
@@ -291,7 +430,7 @@ const GroupWorkspace = () => {
       <div className="min-h-screen bg-gradient-card flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-          <p className="mt-4 text-muted-foreground">Loading workspace...</p>
+          <p className="mt-4 text-muted-foreground">Loading {group?.name || 'workspace'}...</p>
         </div>
       </div>
     );
@@ -302,7 +441,7 @@ const GroupWorkspace = () => {
       <div className="min-h-screen bg-gradient-card flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-foreground mb-4">Group Not Found</h1>
-          <p className="text-muted-foreground mb-4">The requested group could not be found.</p>
+          <p className="text-muted-foreground mb-4">The requested group workspace could not be found.</p>
           <Link to="/dashboard">
             <Button variant="hero">Back to Dashboard</Button>
           </Link>
@@ -314,63 +453,97 @@ const GroupWorkspace = () => {
   return (
     <div className="min-h-screen bg-gradient-card">
       <div className="container mx-auto px-4 py-6">
-        {/* Header */}
+        {/* Dynamic Header for This Specific Group */}
         <div className="mb-6">
-          <Link to={unit ? `/unit/${unit.id}` : "/dashboard"} className="inline-flex items-center text-muted-foreground hover:text-foreground mb-4 transition-colors">
+          <Link 
+            to={unit ? `/unit/${unit.id}` : "/dashboard"} 
+            className="inline-flex items-center text-muted-foreground hover:text-foreground mb-4 transition-colors"
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            {unit ? 'Back to Unit' : 'Back to Dashboard'}
+            {unit ? `Back to ${unit.code}` : 'Back to Dashboard'}
           </Link>
           
           <div className="bg-card/80 backdrop-blur-sm border-primary/10 rounded-lg p-6 shadow-card">
             <div className="flex justify-between items-start">
-              <div>
-                <h1 className="text-2xl font-bold text-foreground mb-2">{group.name}</h1>
-                <p className="text-muted-foreground">
-                  {unit ? `${unit.code} - ${unit.name}` : 'General Group'}
-                </p>
-                {group.description && (
-                  <p className="text-sm text-muted-foreground mt-1">{group.description}</p>
-                )}
-              </div>
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
-                  <Users className="w-4 h-4 text-primary" />
-                  <span className="text-sm text-foreground">{group.members.length}/{group.maxMembers} members</span>
+              <div className="flex-1">
+                <div className="flex items-center space-x-3 mb-2">
+                  <h1 className="text-2xl font-bold text-foreground">{group.name}</h1>
+                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                    {connectionStatus === 'connected' ? '🟢 Live' : connectionStatus === 'connecting' ? '🟡 Connecting' : '🔴 Offline'}
+                  </Badge>
                 </div>
-                <div className="flex -space-x-2">
-                  <Button variant="outline" size="sm" onClick={handleVideoCall}>
-                    <Video className="w-4 h-4 mr-2" />
-                    Google Meet
-                  </Button>
-                  <Button variant="outline" size="sm" className="ml-2">
-                    <GitBranch className="w-4 h-4 mr-2" />
-                    <a href="https://github.com" target="_blank" rel="noopener noreferrer">
-                      GitHub
-                    </a>
-                  </Button>
-                </div>
-                <div className="flex -space-x-2">
-                  {members.slice(0, 4).map((member) => (
-                    <div
-                      key={member.id}
-                      className="w-8 h-8 bg-gradient-primary rounded-full flex items-center justify-center text-xs font-medium text-primary-foreground border-2 border-card"
-                      title={`${member.name} - ${(member as any).role === 'leader' ? 'Leader' : 'Member'}`}
-                    >
-                      {member.name.split(' ').map(n => n[0]).join('')}
-                    </div>
-                  ))}
-                  {members.length > 4 && (
-                    <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-xs font-medium border-2 border-card">
-                      +{members.length - 4}
-                    </div>
+                
+                <div className="space-y-2">
+                  {group.description && (
+                    <p className="text-muted-foreground">{group.description}</p>
                   )}
+                  
+                  <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                    {unit && (
+                      <div className="flex items-center">
+                        <BookOpen className="w-4 h-4 mr-1" />
+                        {unit.code} - {unit.name}
+                      </div>
+                    )}
+                    <div className="flex items-center">
+                      <Users className="w-4 h-4 mr-1" />
+                      {group.members.length}/{group.maxMembers} members
+                    </div>
+                    <div className="flex items-center">
+                      <Calendar className="w-4 h-4 mr-1" />
+                      Created {new Date(group.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-4">
+                {/* Video Call Integration */}
+                <VideoCall 
+                  groupId={group.id}
+                  participants={members.map(member => ({
+                    id: member.id,
+                    name: member.name,
+                    isOnline: member.isOnline || false
+                  }))}
+                />
+                
+                <Button variant="outline" size="sm" onClick={handleGitHub}>
+                  <GitBranch className="w-4 h-4 mr-2" />
+                  GitHub
+                </Button>
+                
+                {/* Group Members Avatars */}
+                <div className="flex items-center space-x-2">
+                  <div className="flex -space-x-2">
+                    {members.slice(0, 4).map((member) => (
+                      <Avatar
+                        key={member.id}
+                        className="w-8 h-8 border-2 border-card"
+                        title={`${member.name} - ${member.role === 'leader' ? 'Leader' : 'Member'}`}
+                      >
+                        <AvatarFallback 
+                          className="text-xs font-medium text-white"
+                          style={{ backgroundColor: `hsl(${Math.abs(member.id.charCodeAt(0)) % 360}, 70%, 50%)` }}
+                        >
+                          {member.name.split(' ').map(n => n[0]).join('')}
+                          {member.role === 'leader' && <Crown className="w-2 h-2 absolute top-0 right-0" />}
+                        </AvatarFallback>
+                      </Avatar>
+                    ))}
+                    {members.length > 4 && (
+                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium border-2 border-card">
+                        +{members.length - 4}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Workspace Tabs */}
+        {/* Workspace Tabs - Specific to This Group */}
         <Tabs defaultValue="document" className="space-y-6">
           <TabsList className="grid w-full grid-cols-5 bg-card/50 backdrop-blur-sm border border-primary/10">
             <TabsTrigger value="document" className="flex items-center space-x-2">
@@ -395,24 +568,19 @@ const GroupWorkspace = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Document Editor */}
+          {/* Collaborative Document Editor - Group Specific */}
           <TabsContent value="document">
-            <EnhancedCollaborativeEditor
+            <CollaborativeEditor
               documentId={`group-${group.id}-main-doc`}
-              initialContent={document}
+              initialContent={documentContent}
               groupId={group.id}
               userId={userId}
               userName={userName}
               onContentChange={handleDocumentChange}
-              permissions={{
-                canEdit: true,
-                canComment: true,
-                canShare: true
-              }}
             />
           </TabsContent>
 
-          {/* Chat */}
+          {/* Real-time Chat - Group Specific */}
           <TabsContent value="chat">
             <Card className="bg-card/80 backdrop-blur-sm border-primary/10">
               <CardContent className="p-0 h-[600px]">
@@ -420,24 +588,19 @@ const GroupWorkspace = () => {
                   groupId={group.id}
                   userId={userId}
                   userName={userName}
-                  initialMessages={chatMessages.map(msg => ({
-                    id: msg.id.toString(),
-                    senderId: msg.sender === userName ? userId : 'other',
-                    senderName: msg.sender,
-                    message: msg.message,
-                    timestamp: new Date(),
-                    type: 'text' as const
-                  }))}
+                  initialMessages={[]}
                 />
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Task Board */}
+          {/* Task Board - Group Specific */}
           <TabsContent value="tasks">
             <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h3 className="text-xl font-semibold text-foreground">Task Board</h3>
+                <h3 className="text-xl font-semibold text-foreground">
+                  Task Board for {group.name}
+                </h3>
                 <Dialog open={isNewTaskOpen} onOpenChange={setIsNewTaskOpen}>
                   <DialogTrigger asChild>
                     <Button variant="accent" size="sm">
@@ -449,14 +612,15 @@ const GroupWorkspace = () => {
                     <DialogHeader>
                       <DialogTitle className="text-foreground">Create New Task</DialogTitle>
                       <DialogDescription className="text-muted-foreground">
-                        Add a new task to the project board.
+                        Add a new task for {group.name}.
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
-                        <Label htmlFor="taskTitle" className="text-foreground">Title</Label>
+                        <Label htmlFor="taskTitle" className="text-foreground">Title *</Label>
                         <Input
                           id="taskTitle"
+                          placeholder="Enter task title"
                           value={newTask.title}
                           onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
                           className="bg-card/50 border-primary/20 focus:border-primary"
@@ -466,27 +630,60 @@ const GroupWorkspace = () => {
                         <Label htmlFor="taskDescription" className="text-foreground">Description</Label>
                         <Textarea
                           id="taskDescription"
+                          placeholder="Describe the task"
                           value={newTask.description}
                           onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
                           className="bg-card/50 border-primary/20 focus:border-primary"
+                          rows={3}
                         />
                       </div>
-                      <div>
-                        <Label htmlFor="taskAssignee" className="text-foreground">Assignee</Label>
-                        <Select value={newTask.assignee} onValueChange={(value) => setNewTask(prev => ({ ...prev, assignee: value }))}>
-                          <SelectTrigger className="bg-card/50 border-primary/20 focus:border-primary">
-                            <SelectValue placeholder="Select assignee" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {members.map((member) => (
-                              <SelectItem key={member.id} value={member.name}>
-                                {member.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="taskAssignee" className="text-foreground">Assignee</Label>
+                          <Select value={newTask.assigneeId} onValueChange={(value) => setNewTask(prev => ({ ...prev, assigneeId: value }))}>
+                            <SelectTrigger className="bg-card/50 border-primary/20 focus:border-primary">
+                              <SelectValue placeholder="Select member" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">Unassigned</SelectItem>
+                              {members.map((member) => (
+                                <SelectItem key={member.id} value={member.id}>
+                                  {member.name} {member.role === 'leader' && '👑'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="taskPriority" className="text-foreground">Priority</Label>
+                          <Select value={newTask.priority} onValueChange={(value: "low" | "medium" | "high") => setNewTask(prev => ({ ...prev, priority: value }))}>
+                            <SelectTrigger className="bg-card/50 border-primary/20 focus:border-primary">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="low">Low</SelectItem>
+                              <SelectItem value="medium">Medium</SelectItem>
+                              <SelectItem value="high">High</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
-                      <Button onClick={handleCreateTask} className="w-full" variant="hero">
+                      <div>
+                        <Label htmlFor="taskDueDate" className="text-foreground">Due Date</Label>
+                        <Input
+                          id="taskDueDate"
+                          type="date"
+                          value={newTask.dueDate}
+                          onChange={(e) => setNewTask(prev => ({ ...prev, dueDate: e.target.value }))}
+                          className="bg-card/50 border-primary/20 focus:border-primary"
+                        />
+                      </div>
+                      <Button 
+                        onClick={handleCreateTask} 
+                        className="w-full" 
+                        variant="hero"
+                        disabled={!newTask.title.trim()}
+                      >
                         Create Task
                       </Button>
                     </div>
@@ -494,36 +691,47 @@ const GroupWorkspace = () => {
                 </Dialog>
               </div>
 
-              <div className="grid md:grid-cols-3 gap-6">
+              {/* Kanban Board */}
+              <div className="grid md:grid-cols-4 gap-6">
                 {/* To Do */}
                 <div>
                   <h4 className="font-medium text-foreground mb-4 flex items-center">
-                    <Clock className="w-4 h-4 mr-2 text-muted-foreground" />
-                    To Do ({getTasksByStatus('To Do').length})
+                    <div className="w-3 h-3 rounded-full bg-gray-500 mr-2" />
+                    To Do ({getTasksByStatus('todo').length})
                   </h4>
                   <div className="space-y-3">
-                    {getTasksByStatus('To Do').map((task) => (
+                    {getTasksByStatus('todo').map((task) => (
                       <Card key={task.id} className="bg-card/60 border-primary/10 hover:shadow-card transition-all duration-200">
                         <CardContent className="p-4">
                           <div className="flex justify-between items-start mb-2">
                             <h5 className="font-medium text-foreground text-sm">{task.title}</h5>
-                            <Badge variant="outline" className="text-xs bg-orange-500/10 text-orange-600 border-orange-500/20">
+                            <Badge variant="outline" className={`text-xs ${getPriorityColor(task.priority)}`}>
                               {task.priority}
                             </Badge>
                           </div>
-                          <p className="text-xs text-muted-foreground mb-3">{task.description}</p>
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center text-xs text-muted-foreground">
-                              <User className="w-3 h-3 mr-1" />
-                              {task.assignee}
-                            </div>
+                          {task.description && (
+                            <p className="text-xs text-muted-foreground mb-3">{task.description}</p>
+                          )}
+                          <div className="space-y-2">
+                            {task.assigneeName && (
+                              <div className="flex items-center text-xs text-muted-foreground">
+                                <UserIcon className="w-3 h-3 mr-1" />
+                                {task.assigneeName}
+                              </div>
+                            )}
+                            {task.dueDate && (
+                              <div className="flex items-center text-xs text-muted-foreground">
+                                <Clock className="w-3 h-3 mr-1" />
+                                Due {task.dueDate.toLocaleDateString()}
+                              </div>
+                            )}
                             <Button 
                               size="sm" 
                               variant="outline"
-                              onClick={() => moveTask(task.id, 'In Progress')}
-                              className="text-xs"
+                              onClick={() => moveTask(task.id, 'in-progress')}
+                              className="w-full text-xs"
                             >
-                              Start
+                              Start Task
                             </Button>
                           </div>
                         </CardContent>
@@ -535,33 +743,98 @@ const GroupWorkspace = () => {
                 {/* In Progress */}
                 <div>
                   <h4 className="font-medium text-foreground mb-4 flex items-center">
-                    <Clock className="w-4 h-4 mr-2 text-blue-500" />
-                    In Progress ({getTasksByStatus('In Progress').length})
+                    <div className="w-3 h-3 rounded-full bg-blue-500 mr-2" />
+                    In Progress ({getTasksByStatus('in-progress').length})
                   </h4>
                   <div className="space-y-3">
-                    {getTasksByStatus('In Progress').map((task) => (
+                    {getTasksByStatus('in-progress').map((task) => (
                       <Card key={task.id} className="bg-card/60 border-blue-500/20 hover:shadow-card transition-all duration-200">
                         <CardContent className="p-4">
                           <div className="flex justify-between items-start mb-2">
                             <h5 className="font-medium text-foreground text-sm">{task.title}</h5>
-                            <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/20">
+                            <Badge variant="outline" className={`text-xs ${getPriorityColor(task.priority)}`}>
                               {task.priority}
                             </Badge>
                           </div>
-                          <p className="text-xs text-muted-foreground mb-3">{task.description}</p>
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center text-xs text-muted-foreground">
-                              <User className="w-3 h-3 mr-1" />
-                              {task.assignee}
+                          {task.description && (
+                            <p className="text-xs text-muted-foreground mb-3">{task.description}</p>
+                          )}
+                          <div className="space-y-2">
+                            {task.assigneeName && (
+                              <div className="flex items-center text-xs text-muted-foreground">
+                                <UserIcon className="w-3 h-3 mr-1" />
+                                {task.assigneeName}
+                              </div>
+                            )}
+                            <div className="flex space-x-1">
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => moveTask(task.id, 'review')}
+                                className="flex-1 text-xs"
+                              >
+                                Review
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => moveTask(task.id, 'done')}
+                                className="flex-1 text-xs"
+                              >
+                                Complete
+                              </Button>
                             </div>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => moveTask(task.id, 'Done')}
-                              className="text-xs"
-                            >
-                              Complete
-                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Review */}
+                <div>
+                  <h4 className="font-medium text-foreground mb-4 flex items-center">
+                    <div className="w-3 h-3 rounded-full bg-purple-500 mr-2" />
+                    Review ({getTasksByStatus('review').length})
+                  </h4>
+                  <div className="space-y-3">
+                    {getTasksByStatus('review').map((task) => (
+                      <Card key={task.id} className="bg-card/60 border-purple-500/20 hover:shadow-card transition-all duration-200">
+                        <CardContent className="p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <h5 className="font-medium text-foreground text-sm">{task.title}</h5>
+                            <Badge variant="outline" className={`text-xs ${getPriorityColor(task.priority)}`}>
+                              {task.priority}
+                            </Badge>
+                          </div>
+                          {task.description && (
+                            <p className="text-xs text-muted-foreground mb-3">{task.description}</p>
+                          )}
+                          <div className="space-y-2">
+                            {task.assigneeName && (
+                              <div className="flex items-center text-xs text-muted-foreground">
+                                <UserIcon className="w-3 h-3 mr-1" />
+                                {task.assigneeName}
+                              </div>
+                            )}
+                            <div className="flex space-x-1">
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => moveTask(task.id, 'in-progress')}
+                                className="flex-1 text-xs"
+                              >
+                                Back
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="default"
+                                onClick={() => moveTask(task.id, 'done')}
+                                className="flex-1 text-xs"
+                              >
+                                Approve
+                              </Button>
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
@@ -572,27 +845,28 @@ const GroupWorkspace = () => {
                 {/* Done */}
                 <div>
                   <h4 className="font-medium text-foreground mb-4 flex items-center">
-                    <CheckSquare className="w-4 h-4 mr-2 text-green-500" />
-                    Done ({getTasksByStatus('Done').length})
+                    <div className="w-3 h-3 rounded-full bg-green-500 mr-2" />
+                    Done ({getTasksByStatus('done').length})
                   </h4>
                   <div className="space-y-3">
-                    {getTasksByStatus('Done').map((task) => (
+                    {getTasksByStatus('done').map((task) => (
                       <Card key={task.id} className="bg-card/60 border-green-500/20 hover:shadow-card transition-all duration-200">
                         <CardContent className="p-4">
                           <div className="flex justify-between items-start mb-2">
                             <h5 className="font-medium text-foreground text-sm">{task.title}</h5>
                             <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-500/20">
-                              Completed
+                              ✓ Complete
                             </Badge>
                           </div>
-                          <p className="text-xs text-muted-foreground mb-3">{task.description}</p>
-                          <div className="flex justify-between items-center">
+                          {task.description && (
+                            <p className="text-xs text-muted-foreground mb-3">{task.description}</p>
+                          )}
+                          {task.assigneeName && (
                             <div className="flex items-center text-xs text-muted-foreground">
-                              <User className="w-3 h-3 mr-1" />
-                              {task.assignee}
+                              <UserIcon className="w-3 h-3 mr-1" />
+                              Completed by {task.assigneeName}
                             </div>
-                            <div className="text-xs text-green-600">✓ Complete</div>
-                          </div>
+                          )}
                         </CardContent>
                       </Card>
                     ))}
@@ -602,63 +876,88 @@ const GroupWorkspace = () => {
             </div>
           </TabsContent>
 
-          {/* Files */}
+          {/* File Sharing - Group Specific */}
           <TabsContent value="files">
             <FileSharing
               groupId={group.id}
               userId={userId}
               userName={userName}
-              initialFiles={group.workspace.files || []}
+              initialFiles={[]}
             />
           </TabsContent>
 
-          {/* Submit */}
+          {/* Assignment Submission - Group Specific */}
           <TabsContent value="submit">
             <Card className="bg-card/80 backdrop-blur-sm border-primary/10">
               <CardHeader>
-                <CardTitle className="text-foreground">Submit Assignment</CardTitle>
+                <CardTitle className="text-foreground">Submit Assignment - {group.name}</CardTitle>
                 <CardDescription className="text-muted-foreground">
-                  Submit your completed group assignment
+                  Submit your completed group assignment for {unit ? unit.name : 'this project'}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
-                  <h4 className="font-medium text-foreground mb-2">
-                    {unit ? `Assignment for ${unit.code}` : 'Group Assignment'}
-                  </h4>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    {unit ? `Complete the assignment for ${unit.name}` : 'Submit your group work here'}
-                  </p>
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Clock className="w-4 h-4 mr-1" />
-                    Due: {new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()} at 11:59 PM
+                {unit && (
+                  <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
+                    <h4 className="font-medium text-foreground mb-2">
+                      Assignment for {unit.code} - {unit.name}
+                    </h4>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Submit your group work for {unit.semester} {unit.year}
+                    </p>
+                    <div className="flex items-center text-sm text-muted-foreground">
+                      <Clock className="w-4 h-4 mr-1" />
+                      Due: {new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()} at 11:59 PM
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="space-y-4">
+                  <div>
+                    <Label className="text-foreground">Group Members Contributing</Label>
+                    <div className="mt-2 space-y-2">
+                      {members.map((member) => (
+                        <div key={member.id} className="flex items-center justify-between p-2 bg-secondary/10 rounded">
+                          <div className="flex items-center space-x-2">
+                            <Avatar className="w-6 h-6">
+                              <AvatarFallback className="text-xs">
+                                {member.name.split(' ').map(n => n[0]).join('')}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm text-foreground">{member.name}</span>
+                            {member.role === 'leader' && <Crown className="w-3 h-3 text-yellow-500" />}
+                          </div>
+                          <Badge variant="outline" className="text-xs">
+                            {member.role}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   <div>
                     <Label className="text-foreground">Submission Files</Label>
                     <div className="mt-2 border-2 border-dashed border-primary/20 rounded-lg p-8 text-center">
                       <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                       <p className="text-sm text-muted-foreground mb-2">
-                        Drag and drop files here, or click to browse
+                        Upload your group's completed assignment files
                       </p>
                       <Button variant="outline" size="sm">Browse Files</Button>
                     </div>
                   </div>
 
                   <div>
-                    <Label htmlFor="submissionComments" className="text-foreground">Comments (Optional)</Label>
+                    <Label htmlFor="submissionComments" className="text-foreground">Group Comments</Label>
                     <Textarea
                       id="submissionComments"
-                      placeholder="Add any comments about your submission..."
+                      placeholder={`Add comments about ${group.name}'s submission...`}
                       className="bg-card/50 border-primary/20 focus:border-primary"
+                      rows={4}
                     />
                   </div>
 
                   <Button className="w-full" variant="hero" size="lg">
                     <Send className="w-4 h-4 mr-2" />
-                    Submit Assignment
+                    Submit Assignment for {group.name}
                   </Button>
                 </div>
               </CardContent>

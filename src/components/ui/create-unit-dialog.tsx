@@ -152,9 +152,9 @@ export const CreateUnitDialog = ({ lecturerId, onUnitCreated }: CreateUnitDialog
                 <SelectValue placeholder="Select semester" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="JAN-APRIL">JAN-APRIL</SelectItem>
-                <SelectItem value="MAY-AUG">MAY-AUG</SelectItem>
-                <SelectItem value="SEPT-DEC">SEPT-DEC</SelectItem>
+                <SelectItem value="JAN-APRIL">JAN - APRIL</SelectItem>
+                <SelectItem value="MAY-AUG">MAY - AUG</SelectItem>
+                <SelectItem value="SEPT-DEC">SEPT - DEC</SelectItem>
               </SelectContent>
             </Select>
           </div>

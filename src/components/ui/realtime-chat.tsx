@@ -43,14 +43,14 @@ export const RealtimeChat = ({ groupId, userId, userName, initialMessages = [] }
   // WebSocket message handling
   useEffect(() => {
     const handleChatMessage = (message: any) => {
-      // Only process messages for this specific group
-      if (message.userId !== userId && message.groupId === groupId) {
+      // Only process chat messages for this specific group from other users
+      if (message.type === 'chat_message' && message.userId !== userId && message.groupId === groupId) {
         const chatMessage: ChatMessage = {
-          id: `${message.userId}-${Date.now()}`,
+          id: `${message.userId}-${message.timestamp || Date.now()}`,
           senderId: message.userId,
           senderName: message.userName,
           message: message.payload.message,
-          timestamp: new Date(message.payload.timestamp),
+          timestamp: new Date(message.payload.timestamp || message.timestamp),
           type: 'text'
         };
         
@@ -59,7 +59,7 @@ export const RealtimeChat = ({ groupId, userId, userName, initialMessages = [] }
     };
 
     const handleUserJoined = (message: any) => {
-      if (message.groupId !== groupId) return;
+      if (message.type === 'user_joined' && message.groupId === groupId && message.userId !== userId) {
       
       setOnlineUsers(prev => {
         if (!prev.includes(message.userId)) {
@@ -70,7 +70,7 @@ export const RealtimeChat = ({ groupId, userId, userName, initialMessages = [] }
 
       // Add system message
       const systemMessage: ChatMessage = {
-        id: `system-${Date.now()}`,
+        id: `system-joined-${message.userId}-${Date.now()}`,
         senderId: 'system',
         senderName: 'System',
         message: `${message.userName} joined the chat`,
@@ -81,13 +81,13 @@ export const RealtimeChat = ({ groupId, userId, userName, initialMessages = [] }
     };
 
     const handleUserLeft = (message: any) => {
-      if (message.groupId !== groupId) return;
+      if (message.type === 'user_left' && message.groupId === groupId && message.userId !== userId) {
       
       setOnlineUsers(prev => prev.filter(id => id !== message.userId));
       
       // Add system message
       const systemMessage: ChatMessage = {
-        id: `system-${Date.now()}`,
+        id: `system-left-${message.userId}-${Date.now()}`,
         senderId: 'system',
         senderName: 'System',
         message: `${message.userName} left the chat`,
@@ -97,21 +97,22 @@ export const RealtimeChat = ({ groupId, userId, userName, initialMessages = [] }
       setMessages(prev => [...prev, systemMessage]);
     };
 
-    wsManager.on('chat_message', handleChatMessage);
-    wsManager.on('user_joined', handleUserJoined);
-    wsManager.on('user_left', handleUserLeft);
+    // Listen to all collaborative messages and filter appropriately
+    wsManager.on('collaborative-message', handleChatMessage);
+    wsManager.on('collaborative-message', handleUserJoined);
+    wsManager.on('collaborative-message', handleUserLeft);
 
     return () => {
-      wsManager.off('chat_message', handleChatMessage);
-      wsManager.off('user_joined', handleUserJoined);
-      wsManager.off('user_left', handleUserLeft);
+      wsManager.off('collaborative-message', handleChatMessage);
+      wsManager.off('collaborative-message', handleUserJoined);
+      wsManager.off('collaborative-message', handleUserLeft);
     };
-  }, [userId]);
+  }, [userId, groupId]);
 
   const sendMessage = () => {
     if (newMessage.trim()) {
       const message: ChatMessage = {
-        id: `${userId}-${Date.now()}`,
+        id: `chat-${userId}-${Date.now()}`,
         senderId: userId,
         senderName: userName,
         message: newMessage,
@@ -121,9 +122,12 @@ export const RealtimeChat = ({ groupId, userId, userName, initialMessages = [] }
 
       setMessages(prev => [...prev, message]);
       
-      // Send message with group context
-      wsManager.sendMessage('chat_message', {
-        groupId,
+      // Send chat message with proper group context
+      wsManager.sendChatMessage(newMessage, groupId);
+      
+      setNewMessage('');
+    }
+  };
         message: newMessage,
         timestamp: new Date()
       });

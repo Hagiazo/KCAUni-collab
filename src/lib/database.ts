@@ -814,7 +814,8 @@ class KCAUDatabase {
         content,
         version,
         lastModified: new Date(),
-        savedBy: 'system'
+        savedBy: 'system',
+        groupId: documentId.includes('group-') ? documentId.split('-')[1] : null
       };
       
       localStorage.setItem(`document_${documentId}`, JSON.stringify(documentData));
