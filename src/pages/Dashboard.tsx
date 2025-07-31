@@ -55,6 +55,14 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
+  // Independent group creation state
+  const [isCreateIndependentGroupOpen, setIsCreateIndependentGroupOpen] = useState(false);
+  const [independentGroupData, setIndependentGroupData] = useState({
+    name: "",
+    description: "",
+    maxMembers: "4"
+  });
+
   // Initialize session and check authentication
   useEffect(() => {
     console.log('Dashboard useEffect triggered');

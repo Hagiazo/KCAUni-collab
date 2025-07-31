@@ -860,8 +860,8 @@ class KCAUDatabase {
       return { success: false, error: 'Only group leaders can delete groups' };
     }
 
-    // Check if group has active assignments or submissions
-    if (group.currentAssignment) {
+    // Check if group has active assignments or submissions (only for unit-based groups)
+    if (group.unitId && group.currentAssignment) {
       return { success: false, error: 'Cannot delete group with active assignments' };
     }
 
@@ -882,6 +882,9 @@ class KCAUDatabase {
       }
     }
     
+    // Clean up group-related data
+    this.cleanupGroupData(group.id);
+    
     // Remove related notifications
     this.notifications = this.notifications.filter(n => 
       !(n.type === 'group' && n.message.includes(group.name))
@@ -891,6 +894,33 @@ class KCAUDatabase {
     return { success: true };
   }
 
+  // Clean up group-related data when group is deleted
+  private cleanupGroupData(groupId: string) {
+    try {
+      // Remove group documents
+      localStorage.removeItem(`document_group-${groupId}-main-doc`);
+      
+      // Remove group chat messages
+      localStorage.removeItem(`chat_messages_${groupId}`);
+      
+      // Remove group tasks
+      localStorage.removeItem(`group_tasks_${groupId}`);
+      
+      // Remove any other group-specific data
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.includes(`group_${groupId}_`) || key.includes(`group-${groupId}-`)) {
+          keysToRemove.push(key);
+        }
+      }
+      
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      console.log(`Cleaned up data for deleted group: ${groupId}`);
+    } catch (error) {
+      console.error('Error cleaning up group data:', error);
+    }
+  }
   // Leave group method
   async leaveGroup(groupId: string, userId: string): Promise<{ success: boolean; error?: string }> {
     const group = this.groups.find(g => g.id === groupId);

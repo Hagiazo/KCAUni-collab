@@ -36,8 +36,29 @@ import {
   Video,
   Crown,
   Calendar,
-  BookOpen
+  BookOpen,
+  Trash2,
+  Settings,
+  AlertTriangle
 } from "lucide-react";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
+} from "@/components/ui/dropdown-menu";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { wsManager } from "@/lib/websocket";
 import { db, type Group, type Unit, type User } from "@/lib/database";
@@ -84,6 +105,8 @@ const GroupWorkspace = () => {
     dueDate: ""
   });
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
+  const [isDeleteGroupOpen, setIsDeleteGroupOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Load group data and initialize workspace
   useEffect(() => {
@@ -317,15 +340,14 @@ ${membersList.map(member => {
 
   // Handle Google Meet video call
   const handleVideoCall = () => {
-    // Generate a unique Google Meet room for this group
-    const meetingId = `${group?.name.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`;
+    // Generate a fresh Google Meet meeting link
     const meetUrl = `https://meet.google.com/new`;
     
     window.open(meetUrl, '_blank', 'noopener,noreferrer');
     
     toast({
-      title: "Google Meet Started",
-      description: `Video call opened for ${group?.name}. Share the link with your team members.`,
+      title: "Google Meet Opened",
+      description: `New meeting created for ${group?.name}. Share the meeting link with your team members.`,
     });
 
     // Log meeting in group history (in production, save to database)
@@ -405,6 +427,45 @@ ${membersList.map(member => {
     });
   };
 
+  // Handle group deletion
+  const handleDeleteGroup = async () => {
+    if (!group) return;
+    
+    setIsDeleting(true);
+    try {
+      const result = await db.deleteGroup(group.id, userId);
+      
+      if (result.success) {
+        toast({
+          title: "Group Deleted",
+          description: `"${group.name}" has been permanently deleted.`,
+        });
+        
+        // Navigate back to dashboard or unit page
+        if (unit) {
+          navigate(`/unit/${unit.id}`);
+        } else {
+          navigate('/dashboard');
+        }
+      } else {
+        toast({
+          title: "Cannot Delete Group",
+          description: result.error || "Failed to delete group",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete group. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteGroupOpen(false);
+    }
+  };
+
   const getTasksByStatus = (status: Task['status']) => {
     return tasks.filter(task => task.status === status);
   };
@@ -428,6 +489,13 @@ ${membersList.map(member => {
     }
   };
 
+  // Check if current user can delete the group
+  const canDeleteGroup = () => {
+    if (!group) return false;
+    const isLeader = group.members.find(m => m.userId === userId && m.role === 'leader');
+    const isCreator = group.createdById === userId;
+    return isLeader || isCreator;
+  };
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-card flex items-center justify-center">
@@ -502,19 +570,80 @@ ${membersList.map(member => {
               
               <div className="flex items-center space-x-4">
                 {/* Video Call Integration */}
-                <VideoCall 
-                  groupId={group.id}
-                  participants={members.map(member => ({
-                    id: member.id,
-                    name: member.name,
-                    isOnline: member.isOnline || false
-                  }))}
-                />
+                <Button variant="outline" size="sm" onClick={handleVideoCall}>
+                  <Video className="w-4 h-4 mr-2" />
+                  Google Meet
+                </Button>
                 
                 <Button variant="outline" size="sm" onClick={handleGitHub}>
                   <GitBranch className="w-4 h-4 mr-2" />
                   GitHub
                 </Button>
+                
+                {/* Group Management Dropdown */}
+                {canDeleteGroup() && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        <MoreVertical className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-card/95 backdrop-blur-sm border-primary/10">
+                      <DropdownMenuItem>
+                        <Settings className="mr-2 h-4 w-4" />
+                        Group Settings
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <AlertDialog open={isDeleteGroupOpen} onOpenChange={setIsDeleteGroupOpen}>
+                        <AlertDialogTrigger asChild>
+                          <DropdownMenuItem 
+                            onSelect={(e) => e.preventDefault()}
+                            className="text-destructive focus:text-destructive cursor-pointer"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete Group
+                          </DropdownMenuItem>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="bg-card/95 backdrop-blur-sm border-primary/10">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="text-foreground flex items-center">
+                              <AlertTriangle className="w-5 h-5 text-destructive mr-2" />
+                              Delete Group
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-muted-foreground">
+                              Are you sure you want to permanently delete "{group.name}"? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          
+                          <div className="space-y-4">
+                            <div className="p-4 bg-destructive/10 rounded-lg border border-destructive/20">
+                              <p className="text-sm text-destructive font-medium mb-2">This will permanently delete:</p>
+                              <ul className="text-sm text-destructive space-y-1">
+                                <li>• All group documents and collaborative content</li>
+                                <li>• Complete chat history and messages</li>
+                                <li>• All tasks and project files</li>
+                                <li>• Access for all {group.members.length} group members</li>
+                              </ul>
+                            </div>
+                          </div>
+                          
+                          <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isDeleting}>
+                              Cancel
+                            </AlertDialogCancel>
+                            <AlertDialogAction 
+                              onClick={handleDeleteGroup}
+                              disabled={isDeleting}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              {isDeleting ? "Deleting..." : "Delete Group"}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 
                 {/* Group Members Avatars */}
                 <div className="flex items-center space-x-2">
