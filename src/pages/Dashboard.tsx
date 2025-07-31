@@ -29,6 +29,10 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { db, type Unit, type Group, type User as DbUser } from "@/lib/database";
 import { sessionManager } from "@/lib/session-manager";
@@ -62,10 +66,6 @@ const Dashboard = () => {
     description: "",
     maxMembers: "4"
   });
-  
-  // Browse units state
-  const [isBrowseUnitsOpen, setIsBrowseUnitsOpen] = useState(false);
-  const [allAvailableUnits, setAllAvailableUnits] = useState<Unit[]>([]);
 
   // Initialize session and check authentication
   useEffect(() => {
