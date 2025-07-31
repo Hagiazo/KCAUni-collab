@@ -85,7 +85,8 @@ export const RealtimeChat = ({
   useEffect(() => {
     if (groupId && userId && userName) {
       try {
-        wsManager.connect(groupId, userId, userName);
+        // Connect using group-specific document ID for chat
+        wsManager.connect(`group-${groupId}-chat`, userId, userName);
         
         // Listen for connection status
         wsManager.on('connection_status', (status: any) => {
@@ -94,13 +95,13 @@ export const RealtimeChat = ({
 
         // Listen for chat messages
         wsManager.on('chat_message', (message: any) => {
-          if (message.groupId === groupId && message.userId !== userId) {
+          if (message.payload?.groupId === groupId && message.userId !== userId) {
             const newChatMessage: ChatMessage = {
               id: uuidv4(),
               senderId: message.userId,
               senderName: message.userName,
-              message: message.payload.message,
-              timestamp: new Date(message.payload.timestamp),
+              message: message.payload?.message || '',
+              timestamp: new Date(message.payload?.timestamp || Date.now()),
               type: 'text'
             };
             
@@ -114,7 +115,7 @@ export const RealtimeChat = ({
 
         // Listen for user presence
         wsManager.on('user_joined', (message: any) => {
-          if (message.groupId === groupId) {
+          if (message.payload?.groupId === groupId || message.documentId?.includes(groupId)) {
             setOnlineUsers(prev => [...prev.filter(id => id !== message.userId), message.userId]);
             
             // Add system message
@@ -136,7 +137,7 @@ export const RealtimeChat = ({
         });
 
         wsManager.on('user_left', (message: any) => {
-          if (message.groupId === groupId) {
+          if (message.payload?.groupId === groupId || message.documentId?.includes(groupId)) {
             setOnlineUsers(prev => prev.filter(id => id !== message.userId));
             
             // Add system message

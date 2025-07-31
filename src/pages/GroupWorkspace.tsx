@@ -251,7 +251,8 @@ ${groupData.members.map(member => {
     if (groupId && userId && userName && group) {
       try {
         setConnectionStatus('connecting');
-        wsManager.connect(groupId, userId, userName);
+        // Connect using a document ID specific to this group
+        wsManager.connect(`group-${groupId}-main-doc`, userId, userName);
         
         // Listen for connection status
         wsManager.on('connection_status', (status: any) => {
@@ -268,7 +269,7 @@ ${groupData.members.map(member => {
 
         // Listen for task updates
         wsManager.on('task_updated', (message: any) => {
-          if (message.groupId === groupId && message.userId !== userId) {
+          if (message.payload?.groupId === groupId && message.userId !== userId) {
             loadGroupTasks(groupId);
           }
         });
@@ -374,7 +375,7 @@ ${groupData.members.map(member => {
     saveGroupTasks(updatedTasks);
 
     // Send task update to other group members
-    wsManager.sendTaskUpdate(task.id, { action: 'created', task });
+    wsManager.sendTaskUpdate({ action: 'created', task }, group.id);
 
     setNewTask({ title: "", description: "", assigneeId: "", priority: "medium", dueDate: "" });
     setIsNewTaskOpen(false);
@@ -393,7 +394,7 @@ ${groupData.members.map(member => {
     saveGroupTasks(updatedTasks);
 
     // Send task update to other group members
-    wsManager.sendTaskUpdate(taskId, { action: 'moved', status: newStatus });
+    wsManager.sendTaskUpdate({ action: 'moved', taskId, status: newStatus }, group.id);
 
     const task = tasks.find(t => t.id === taskId);
     toast({

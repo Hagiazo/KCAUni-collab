@@ -47,7 +47,7 @@ export const CollaborativeEditor = ({
   // Initialize WebSocket connection
   useEffect(() => {
     try {
-      wsManager.connect(groupId, userId, userName);
+      wsManager.connect(documentId, userId, userName);
       setConnectionStatus('Connecting...');
     } catch (error) {
       console.error('Failed to connect to WebSocket:', error);
@@ -67,17 +67,16 @@ export const CollaborativeEditor = ({
     wsManager.on('connection_status', handleConnectionStatus);
     // Listen for document changes from other users
     const handleDocumentChange = (message: any) => {
-      const change: DocumentChange = message.payload;
-      if (change.documentId === documentId && message.userId !== userId) {
-        setContent(change.content);
-        setVersion(change.version);
-        onContentChange?.(change.content);
+      if (message.payload.documentId === documentId && message.userId !== userId) {
+        setContent(message.payload.content);
+        setVersion(message.payload.version);
+        onContentChange?.(message.payload.content);
       }
     };
 
     // Listen for cursor position updates
     const handleCursorPosition = (message: any) => {
-      if (message.payload.documentId === documentId && message.userId !== userId) {
+      if (message.documentId === documentId && message.userId !== userId) {
         setActiveUsers(prev => {
           const existing = prev.find(user => user.userId === message.userId);
           const color = COLORS[Math.abs(message.userId.charCodeAt(0)) % COLORS.length];
@@ -102,6 +101,7 @@ export const CollaborativeEditor = ({
 
     // Listen for user join/leave events
     const handleUserJoined = (message: any) => {
+      if (message.documentId !== documentId) return;
       const color = COLORS[Math.abs(message.userId.charCodeAt(0)) % COLORS.length];
       setActiveUsers(prev => {
         if (!prev.find(user => user.userId === message.userId)) {
@@ -117,6 +117,7 @@ export const CollaborativeEditor = ({
     };
 
     const handleUserLeft = (message: any) => {
+      if (message.documentId !== documentId) return;
       setActiveUsers(prev => prev.filter(user => user.userId !== message.userId));
     };
 

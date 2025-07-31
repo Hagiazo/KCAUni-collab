@@ -130,7 +130,7 @@ export const FileSharing = ({ groupId, userId, userName, initialFiles = [] }: Fi
           content: newFile.content
         };
 
-        wsManager.sendFileUpload(fileUpload);
+        wsManager.sendFileUpload(fileUpload, groupId);
 
         // Complete upload
         setTimeout(() => {

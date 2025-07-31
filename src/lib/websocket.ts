@@ -34,7 +34,7 @@ export interface FileUpload {
 
 class WebSocketManager {
   private socket: Socket | null = null;
-  private groupId: string | null = null;
+  private documentId: string | null = null;
   private userId: string | null = null;
   private userName: string | null = null;
   private listeners: Map<string, Function[]> = new Map();
@@ -42,7 +42,7 @@ class WebSocketManager {
   private maxReconnectAttempts: number = 5;
   private isReconnecting: boolean = false;
 
-  connect(groupId: string, userId: string, userName: string) {
+  connect(documentId: string, userId: string, userName: string) {
     if (this.socket) {
       this.socket.disconnect();
     }
@@ -56,7 +56,7 @@ class WebSocketManager {
       timeout: 20000
     });
 
-    this.groupId = groupId;
+    this.documentId = documentId;
     this.userId = userId;
     this.userName = userName;
 
@@ -64,7 +64,7 @@ class WebSocketManager {
       console.log('Connected to WebSocket server');
       this.connectionAttempts = 0;
       this.isReconnecting = false;
-      this.joinGroup(groupId);
+      this.joinDocument(documentId);
       this.emit('connection_status', { connected: true, attempts: this.connectionAttempts });
     });
 
@@ -97,7 +97,7 @@ class WebSocketManager {
       console.log('Reconnected to WebSocket server after', attemptNumber, 'attempts');
       this.connectionAttempts = 0;
       this.isReconnecting = false;
-      this.joinGroup(groupId);
+      this.joinDocument(documentId);
       this.emit('connection_status', { connected: true, attempts: 0 });
     });
   }
@@ -115,11 +115,11 @@ class WebSocketManager {
     this.listeners.clear();
   }
 
-  joinGroup(groupId: string) {
+  joinDocument(documentId: string) {
     if (this.socket) {
       this.socket.emit('collaborative-message', {
-        type: 'user_joined',
-        groupId,
+        type: 'document-request',
+        documentId,
         userId: this.userId,
         userName: this.userName,
         timestamp: new Date(),
@@ -134,8 +134,7 @@ class WebSocketManager {
       payload,
       userId: this.userId!,
       userName: this.userName!,
-      groupId: this.groupId!,
-      groupId: this.groupId!,
+      documentId: this.documentId!,
       timestamp: new Date()
     };
 
@@ -154,7 +153,7 @@ class WebSocketManager {
 
   private handleLocalMessage(message: WebSocketMessage) {
     // Store in localStorage for offline collaboration
-    const key = `workspace_${this.groupId}_${message.type}`;
+    const key = `workspace_${this.documentId}_${message.type}`;
     const existing = JSON.parse(localStorage.getItem(key) || '[]');
     existing.push(message);
     localStorage.setItem(key, JSON.stringify(existing.slice(-100))); // Keep last 100 messages
@@ -236,20 +235,42 @@ class WebSocketManager {
   }
 
   // Chat methods
-  sendChatMessage(message: string, targetGroupId?: string) {
-    this.sendMessage('chat_message', {
-      groupId: targetGroupId || this.groupId,
-      message,
-      timestamp: new Date()
-    });
+  sendChatMessage(message: string, groupId: string) {
+    if (this.socket?.connected) {
+      this.socket.emit('chat-message', {
+        groupId,
+        message,
+        userId: this.userId,
+        userName: this.userName,
+        timestamp: Date.now()
+      });
+    }
   }
 
   // Task management methods
-  sendTaskUpdate(taskId: string, updates: any) {
-    this.sendMessage('task_updated', {
-      taskId,
-      updates
-    });
+  sendTaskUpdate(taskData: any, groupId: string) {
+    if (this.socket?.connected) {
+      this.socket.emit('task-update', {
+        groupId,
+        taskData,
+        userId: this.userId,
+        userName: this.userName,
+        timestamp: Date.now()
+      });
+    }
+  }
+
+  // File upload method
+  sendFileUpload(fileData: any, groupId: string) {
+    if (this.socket?.connected) {
+      this.socket.emit('file-upload', {
+        groupId,
+        fileData,
+        userId: this.userId,
+        userName: this.userName,
+        timestamp: Date.now()
+      });
+    }
   }
 }
 
