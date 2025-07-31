@@ -883,6 +883,49 @@ class KCAUDatabase {
     this.saveToStorage();
     return { success: true };
   }
+
+  // Leave group method
+  async leaveGroup(groupId: string, userId: string): Promise<{ success: boolean; error?: string }> {
+    const group = this.groups.find(g => g.id === groupId);
+    
+    if (!group) {
+      return { success: false, error: 'Group not found' };
+    }
+
+    const memberIndex = group.members.findIndex(m => m.userId === userId);
+    
+    if (memberIndex === -1) {
+      return { success: false, error: 'User is not a member of this group' };
+    }
+
+    const member = group.members[memberIndex];
+    
+    // Prevent leader from leaving (they should transfer leadership or delete group)
+    if (member.role === 'leader') {
+      return { success: false, error: 'Group leaders cannot leave. Transfer leadership or delete the group.' };
+    }
+
+    // Remove member from group
+    group.members.splice(memberIndex, 1);
+    group.lastActivity = new Date();
+    
+    // Notify remaining group members
+    const user = await this.getUser(userId);
+    for (const remainingMember of group.members) {
+      await this.createNotification({
+        userId: remainingMember.userId,
+        type: 'group',
+        title: 'Member Left Group',
+        message: `${user?.name || 'A member'} has left the group "${group.name}"`,
+        read: false,
+        priority: 'low'
+      });
+    }
+    
+    this.saveToStorage();
+    return { success: true };
+  }
+
   // Search units by code
   async searchUnitsByCode(code: string, studentId: string): Promise<Unit[]> {
     const student = await this.getUser(studentId);
