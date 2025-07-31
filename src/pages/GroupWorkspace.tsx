@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CollaborativeEditor } from "@/components/ui/collaborative-editor";
 import { FileSharing } from "@/components/ui/file-sharing";
 import { RealtimeChat } from "@/components/ui/realtime-chat";
+import { EnhancedCollaborativeEditor } from "@/components/ui/enhanced-collaborative-editor";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   ArrowLeft, 
@@ -424,17 +425,22 @@ ${memberDetails.filter(Boolean).map((member: any) =>
               <CardHeader>
                 <CardTitle className="text-foreground">Collaborative Document</CardTitle>
                 <CardDescription className="text-muted-foreground">
-                  Real-time collaborative editing for your group project
+                  Enterprise-grade real-time collaborative editing with operational transformation
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <CollaborativeEditor
+                <EnhancedCollaborativeEditor
                   documentId={`group-${group.id}-main-doc`}
                   initialContent={document}
                   groupId={group.id}
                   userId={userId}
                   userName={userName}
                   onContentChange={handleDocumentChange}
+                  permissions={{
+                    canEdit: true,
+                    canComment: true,
+                    canShare: true
+                  }}
                 />
               </CardContent>
             </Card>
