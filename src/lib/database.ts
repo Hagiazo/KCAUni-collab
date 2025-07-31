@@ -393,15 +393,18 @@ class KCAUDatabase {
   }
 
   async authenticateUser(email: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> {
+    console.log('Authenticating user with email:', email);
     const user = this.users.find(u => u.email === email && u.password === password);
     
     if (!user) {
+      console.log('Authentication failed - user not found');
       return { success: false, error: 'Invalid email or password' };
     }
 
     // Update user online status
     user.isOnline = true;
     user.lastSeen = new Date();
+    console.log('Authentication successful for user:', user);
     this.saveToStorage();
 
     return { success: true, user };
