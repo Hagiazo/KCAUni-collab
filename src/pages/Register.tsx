@@ -187,7 +187,7 @@ const Register = () => {
                   <Input
                     id="name"
                     type="text"
-                    placeholder="John Doe"
+                    placeholder="Martin Kamau"
                     value={formData.name}
                     onChange={(e) => handleInputChange("name", e.target.value)}
                     className="pl-10 bg-card/50 border-primary/20 focus:border-primary"
